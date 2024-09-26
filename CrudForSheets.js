@@ -69,17 +69,40 @@ class DB {
         if (!historyTable) historyTable = this.spreadsheet.insertSheet(`DELETED_${tableName}`);
       }
 
-      const headers = ['ID', 'TIME_STAMP', ...Object.keys(fields).map(field => field.toUpperCase())]
+      const headers = ['ID', 'DATE', ...Object.keys(fields).map(field => field.toUpperCase())]
 
       mainTable.getRange(1, 1, 1, headers.length).setValues([headers]);
       historyTable.getRange(1, 1, 1, headers.length).setValues([headers]);
 
       this.tables[tableName] = fields;
+      return {
+        status: 200,
+        message: "table created successfully"
+      }
     } catch (err) {
       console.error(`Error when trying to init the database: ${err.message}`)
       return {
         status: 500,
         error: err.message
+      };
+    }
+  }
+
+
+  putTableIntoDbContext(config){
+    const { tableName, historyTableName, fields } = config;
+
+    if (this.tables[tableName]){
+      console.error(`Error when trying to put table in context of the database: ${err.message}`)
+      return {
+        status: 500,
+        error: err.message
+      };
+    } else {
+      this.tables[tableName] = fields;
+      return {
+        status: 200,
+        message: "Table added to the schema"
       };
     }
   }
@@ -101,9 +124,14 @@ class DB {
       if (!sheet) {
         throw new Error(`Table "${tableName}" not found.`);
       }
-      if (!this._validateData(data, keyOrder)) {
-        throw new Error("Invalid data format");
+      // if (!this._validateData(data, keyOrder)) {
+      //   throw new Error("Invalid data format");
+      // }
+      const validation = this._validateData(data, keyOrder, `in table "${tableName}"`);
+      if (!validation.isValid) {
+        throw new Error(`Missing required fields: ${validation.missingKeys.join(', ')} in table "${tableName}"`);
       }
+
       let typesChecked = false;
       if (this.tables[tableName]) {
         for (const [key, val] of Object.entries(data)) {
@@ -186,8 +214,13 @@ class DB {
       let rowIndex = this._findRowById(sheet, id);
       if (rowIndex === -1) throw new Error(`Record with ID ${id} not found`);
 
-      if (!this._validateData(data, keyOrder)) {
-        throw new Error("Invalid data format");
+      // if (!this._validateData(data, keyOrder)) {
+      //   throw new Error("Invalid data format");
+      // }
+
+      const validation = this._validateData(data, keyOrder, `in table "${tableName}"`);
+      if (!validation.isValid) {
+        throw new Error(`Missing required fields: ${validation.missingKeys.join(', ')} in table "${tableName}"`);
       }
 
       if (!typesChecked) {
@@ -486,8 +519,21 @@ class DB {
     return searchResult ? searchResult.getRow() : -1;
   }
 
-  _validateData(data, keyOrder) {
-    return keyOrder.every((key) => key in data);
+  // _validateData(data, keyOrder) {
+  //   return keyOrder.every((key) => key in data);
+  // }
+
+   /**
+   * Validates that all required keys are present in the data object.
+   * @param {Object} data - The data object to validate.
+   * @param {string[]} keyOrder - An array of required keys.
+   * @param {string} [context] - Optional context for error messages.
+   * @returns {Object} - An object containing validation status and missing keys.
+   */
+  _validateData(data, keyOrder, context = "") {
+    const missingKeys = keyOrder.filter(key => !(key in data));
+    const isValid = missingKeys.length === 0;
+    return { isValid, missingKeys, context };
   }
 
   _checkType(value, expectedType) {
@@ -572,4 +618,168 @@ function init(dbName, dbId = "") {
 }
 
 
+function example() {
+  const db = new DB('myTestDataBase', dbId="1auvs768mjQQS9dTJuutCOpYKvWTSUjtPmzzZCSZBM1M");
 
+  console.log(db.getCreationResult());
+
+  const employeeTableConfig = {
+    tableName: "EMPLOYEES",
+    fields: {
+       name: "string" ,
+       age: "number" ,
+       position: "string" ,
+       employed: "boolean" ,
+       hire_date: "date" ,
+    }
+  }
+
+  db.createTable(employeeTableConfig);
+
+  console.log("employee table created");
+
+  const employees = [
+    {
+      name: 'John Doe',
+      age: 30,
+      position: 'Software Engineer',
+      employed: true,
+      hire_date: new Date('2022-01-15')
+    }, {
+      name: 'Jane Smith',
+      age: 28,
+      position: 'Product Manager',
+      employed: true,
+      hire_date: new Date('2021-11-05')
+    }, {
+      name: 'Mike Johnson',
+      age: 35,
+      position: 'Data Scientist',
+      employed: true,
+      hire_date: new Date('2020-08-20')
+    }, {
+      name: 'Emily Davis',
+      age: 24,
+      position: 'UX Designer',
+      employed: false,
+      hire_date: new Date('2019-02-01')
+    }, {
+      name: 'Chris Lee',
+      age: 40,
+      position: 'Operations Manager',
+      employed: true,
+      hire_date: new Date('2020-12-10')
+    }, {
+      name: 'Sarah Wilson',
+      age: 33,
+      position: 'HR Specialist',
+      employed: true,
+      hire_date: new Date('2018-06-18')
+    }, {
+      name: 'Alex Martin',
+      age: 29,
+      position: 'Business Analyst',
+      employed: false,
+      hire_date: new Date('2021-04-25')
+    }, {
+      name: 'Linda Clark',
+      age: 42,
+      position: 'Accountant',
+      employed: true,
+      hire_date: new Date('2021-09-30')
+    }, {
+      name: 'James Walker',
+      age: 27,
+      position: 'DevOps Engineer',
+      employed: true,
+      hire_date: new Date('2017-07-19')
+    }, {
+      name: 'Jessica Brown',
+      age: 26,
+      position: 'Marketing Manager',
+      employed: false,
+      hire_date: new Date('2022-03-22')
+    }, {
+      name: 'Robert Harris',
+      age: 37,
+      position: 'Network Engineer',
+      employed: true,
+      hire_date: new Date('2021-01-11')
+    }, {
+      name: 'Sophia Lewis',
+      age: 31,
+      position: 'Backend Developer',
+      employed: true,
+      hire_date: new Date('2020-05-15')
+    }, {
+      name: 'Lucas Moore',
+      age: 34,
+      position: 'Frontend Developer',
+      employed: false,
+      hire_date: new Date('2022-02-17')
+    }, {
+      name: 'Olivia Taylor',
+      age: 25,
+      position: 'QA Engineer',
+      employed: true,
+      hire_date: new Date('2020-10-27')
+    }, {
+      name: 'Daniel Anderson',
+      age: 38,
+      position: 'System Administrator',
+      employed: true,
+      hire_date: new Date('2019-11-09')
+    },
+  ];
+  // let results = []
+  // for (e of employees) {
+  //   results.push(db.create('EMPLOYEES', e, ['name', 'age', 'position', 'employed', 'hire_date']));
+  // }
+  db.create('EMPLOYEES', {
+    name: "hola",
+    age: 25,
+    position: 'QA Engineer',
+    employed: "true",
+    hire_date: new Date('2020-10-27')
+  }, ['name', 'age', 'position', 'employed', 'hire_date'])
+  // console.log('Create Result: ', results);
+
+  // Read an employee by ID
+  // const readResult = db.read('EMPLOYEES', createResult.id);
+  // console.log('Read Result:', readResult.data);
+
+  // Update the employee record
+  // const updatedEmployee = {
+  //   name: 'John Doe',
+  //   age: 31, // Updated age
+  //   position: 'Senior Software Engineer', // Updated position
+  // };
+  // const updateResult = db.update('EMPLOYEES', createResult.id, updatedEmployee, ['name', 'age', 'position']);
+  // console.log('Update Result:', updateResult);
+
+  // Delete the employee record
+  // const deleteResult = db.remove('EMPLOYEES', 'DELETED_EMPLOYEES', createResult.id);
+  // console.log('Delete Result:', deleteResult);
+  // Get All with pagination and sorting
+  const getAllResult = db.getAll('EMPLOYEES', 
+                                              { page: 1, 
+                                                pageSize: 25, 
+                                                sortBy: 'hire_date', 
+                                                sortOrder: 'desc'
+                                                }, 
+                                                useCache=false);
+  console.log(getAllResult);
+
+
+  // getAllResult.data.map((row) => {
+  //    console.log(row)
+  //    for (const [key, val] of Object.entries(row)) {
+  //       console.log(`type of ${key}: `, typeof(val))
+  //       if (key === "DATE"){
+  //         console.log("fecha es un tipo Date",val instanceof Date);
+  //         console.log("getime en la fecha:", val.getTime());
+  //       }
+  //     }
+  // })
+
+}
