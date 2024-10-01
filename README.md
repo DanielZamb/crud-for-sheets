@@ -15,6 +15,9 @@ Welcome to the **Google Apps Script CRUD Class for Google Sheets**! This library
 
 ## 📦 Installation
 
+**Copy the class found in CrudForSheets.js** *( i have yet to find out how to share a library publicly, when i do follow the steps bellow)*
+
+------------------------------------------------------------------------------------------------------------------------------------------
 1. **Open Google Apps Script Editor**:
    - Go to your Google Sheets.
    - Click on `Extensions` > `Apps Script`.
@@ -26,6 +29,7 @@ Welcome to the **Google Apps Script CRUD Class for Google Sheets**! This library
 
 3. **Use the Library**:
    - You can now use the `DB` class from the library to manage your spreadsheets.
+
 
 ## 📚 Usage
 
