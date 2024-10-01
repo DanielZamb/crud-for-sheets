@@ -519,8 +519,8 @@ Here's how you can integrate the `DB` class into a web application using Google 
 function doGet(e) {
   return HtmlService.createTemplateFromFile("index")
     .evaluate()
-    .setTitle("CRM PQRS")
-    .setFaviconUrl("https://www.serviciosfacilities.com/favicon.ico")
+    .setTitle("Test_crud_app")
+    .setFaviconUrl("YOUR_ICON")
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
@@ -533,7 +533,7 @@ function include(filename){
 }
 
 // Initialize the database
-const db = DB.init("PQRS WareHouse", "1Bq5_v3BeX3aIVwq-lbPMGE7HxuVSpx5LqoJ8ygUMkmI");
+const db = DB.init("SHEET_NAME", "YOUR_SHEET_ID");
 
 // Define table configurations
 const requestTableConfig = {
@@ -581,9 +581,15 @@ const actionTableConfig = {
   }
 };
 
+// Create the table OR
+console.log(db.createTable(requestTableConfig));
+console.log(db.createTable(actionTableConfig));
+
 // Add tables to the database context
 console.log(db.putTableIntoDbContext(requestTableConfig));
 console.log(db.putTableIntoDbContext(actionTableConfig));
+
+
 
 // Apply a color scheme to the ACTION_PLAN table
 console.log(db.applyColorScheme(actionTableConfig.tableName, 'orange'));
@@ -660,318 +666,5 @@ function updateActionPlan(newActionPlan){
                             Object.keys(actionTableConfig.fields));
   Logger.log(response);
   return JSON.stringify(response);
-}
-```
-
-## 📖 Complete README
-
-Below is the complete, enhanced README with user-friendly explanations, emojis, and split example functions to help you get started quickly!
-
----
-
-# 📊 Google Apps Script CRUD Class for Google Sheets
-
-Welcome to the **Google Apps Script CRUD Class for Google Sheets**! This library simplifies managing your Google Sheets as databases, allowing you to perform **Create, Read, Update,** and **Delete** (CRUD) operations with ease. Whether you're building a CRM, inventory system, or any data-driven application, this library has got you covered! 🚀
-
-![CRUD](https://img.icons8.com/color/96/000000/database.png)
-
-## 🌟 Features
-
-- **✨ CRUD Operations**: Seamlessly Create, Read, Update, and Delete records in Google Sheets.
-- **📜 History Tracking**: Automatically track deletions with history tables.
-- **🔍 Sorting & Pagination**: Easily sort and paginate your data for better management.
-- **✅ Type Validation**: Ensure data integrity with type checking (`number`, `string`, `boolean`, `date`).
-- **🎨 Customizable Color Schemes**: Beautify your sheets with predefined color themes.
-- **⚡️ Caching**: Improve performance with built-in caching mechanisms.
-
-## 📦 Installation
-
-1. **Open Google Apps Script Editor**:
-   - Go to your Google Sheets.
-   - Click on `Extensions` > `Apps Script`.
-
-2. **Add the Library**:
-   - In the Apps Script editor, click on the `+` icon next to `Libraries`.
-   - Enter the Library ID: `1flBjZa3u09YAgozp3H-GEhkxpl61rbB2QW2SKnV7ZVlRHNhgxZydegDG`.
-   - Select the latest version and add it to your project.
-
-3. **Use the Library**:
-   - You can now use the `DB` class from the library to manage your spreadsheets.
-
-## 📚 Usage
-
-### 🚀 Initialization
-
-Initialize the database by creating a new instance of the `DB` class. You can either create a new spreadsheet or connect to an existing one using its ID.
-
-```javascript
-/**
- * Initialize the database.
- */
-function initializeDatabase() {
-  // Initialize a new spreadsheet database
-  const db = DB.init('MyDatabase');
-
-  // OR connect to an existing spreadsheet using its ID
-  const existingDb = DB.init('ExistingDatabase', 'YOUR_SPREADSHEET_ID');
-
-  // Log the creation result
-  console.log(db.getCreationResult());
-}
-```
-
-### 🛠️ Creating Tables
-
-Define and create tables within your spreadsheet. Each table represents a sheet with specified fields and types.
-
-```javascript
-/**
- * Create tables in the database.
- */
-function createTables() {
-  const db = DB.init('MyDatabase');
-
-  // Define configuration for the EMPLOYEES table
-  const employeeTableConfig = {
-    tableName: "EMPLOYEES",
-    fields: {
-      name: "string",
-      age: "number",
-      position: "string",
-      employed: "boolean",
-      hire_date: "date",
-    }
-  };
-
-  // Create the EMPLOYEES table
-  const createResult = db.createTable(employeeTableConfig);
-  console.log("Employee table created:", createResult);
-
-  // Define configuration for the DEPARTMENTS table
-  const departmentTableConfig = {
-    tableName: "DEPARTMENTS",
-    fields: {
-      department_name: "string",
-      manager_id: "number",
-      location: "string",
-    }
-  };
-
-  // Create the DEPARTMENTS table
-  const deptCreateResult = db.createTable(departmentTableConfig);
-  console.log("Departments table created:", deptCreateResult);
-}
-```
-
-### ➕ Creating Records
-
-Insert new records into your tables. You can also define policies to update existing records based on specific conditions.
-
-```javascript
-/**
- * Add new employees to the EMPLOYEES table.
- */
-function addEmployees() {
-  const db = DB.init('MyDatabase');
-  
-  const employees = [
-    {
-      name: 'John Doe',
-      age: 30,
-      position: 'Software Engineer',
-      employed: true,
-      hire_date: new Date('2022-01-15')
-    },
-    {
-      name: 'Jane Smith',
-      age: 28,
-      position: 'Product Manager',
-      employed: true,
-      hire_date: new Date('2021-11-05')
-    },
-    // Add more employees as needed
-  ];
-
-  employees.forEach(employee => {
-    const result = db.create('EMPLOYEES', employee, ['name', 'age', 'position', 'employed', 'hire_date']);
-    console.log('Create Result:', result);
-  });
-}
-```
-
-### 🔍 Reading Records
-
-Retrieve specific records or all records from a table. Supports sorting and pagination for efficient data handling.
-
-```javascript
-/**
- * Read all employees from the EMPLOYEES table.
- */
-function readEmployees() {
-  const db = DB.init('MyDatabase');
-
-  // Retrieve all employees, sorted by hire_date in descending order, 10 per page
-  const employees = db.getAll('EMPLOYEES', { 
-    page: 1, 
-    pageSize: 10, 
-    sortBy: 'hire_date', 
-    sortOrder: 'desc' 
-  }, false); // `false` to bypass cache
-
-  console.log('Employees:', employees.data);
-}
-```
-
-### ✏️ Updating Records
-
-Modify existing records in your tables based on their unique ID.
-
-```javascript
-/**
- * Update an employee's information.
- */
-function updateEmployee() {
-  const db = DB.init('MyDatabase');
-
-  const updatedEmployee = {
-    name: 'John Doe',
-    age: 31, // Updated age
-    position: 'Senior Software Engineer', // Updated position
-    employed: true,
-    hire_date: new Date('2022-01-15')
-  };
-
-  // Update employee with ID 1
-  const updateResult = db.update('EMPLOYEES', 1, updatedEmployee, ['name', 'age', 'position', 'employed', 'hire_date']);
-  console.log('Update Result:', updateResult);
-}
-```
-
-### 🗑️ Deleting Records
-
-Remove records from your tables. Deleted records are moved to a history table for tracking purposes.
-
-```javascript
-/**
- * Delete an employee from the EMPLOYEES table.
- */
-function deleteEmployee() {
-  const db = DB.init('MyDatabase');
-
-  // Delete employee with ID 1 and move to DELETED_EMPLOYEES history table
-  const deleteResult = db.remove('EMPLOYEES', 'DELETED_EMPLOYEES', 1);
-  console.log('Delete Result:', deleteResult);
-}
-```
-
-### 🎨 Applying Color Schemes
-
-Enhance the visual appeal of your sheets by applying predefined color themes.
-
-```javascript
-/**
- * Apply a color scheme to the EMPLOYEES table.
- */
-function applyColorScheme() {
-  const db = DB.init('MyDatabase');
-
-  // Apply the 'blue' color scheme
-  db.applyColorScheme('EMPLOYEES', 'blue');
-  
-  console.log('Color scheme applied to EMPLOYEES table.');
-}
-```
-
-## 🔧 Advanced Examples
-
-### 📈 Fetching with Pagination and Sorting
-
-Retrieve data with advanced options like pagination and sorting to handle large datasets efficiently.
-
-```javascript
-/**
- * Fetch paginated and sorted employee data.
- */
-function fetchPaginatedEmployees() {
-  const db = DB.init('MyDatabase');
-
-  const options = {
-    page: 2,          // Page number
-    pageSize: 5,      // Number of records per page
-    sortBy: 'age',    // Field to sort by
-    sortOrder: 'asc'  // Sort order: 'asc' or 'desc'
-  };
-
-  const result = db.getAll('EMPLOYEES', options, true); // `true` to use cache
-  console.log(`Page ${options.page} Employees:`, result.data);
-}
-```
-
-### 🛡️ Handling Type Validation
-
-Ensure data integrity by validating the types of incoming data before performing operations.
-
-```javascript
-/**
- * Add an employee with type validation.
- */
-function addEmployeeWithValidation() {
-  const db = DB.init('MyDatabase');
-
-  const employee = {
-    name: 'Alice Johnson',
-    age: 'Thirty', // Incorrect type: should be a number
-    position: 'Designer',
-    employed: true,
-    hire_date: new Date('2023-03-10')
-  };
-
-  const result = db.create('EMPLOYEES', employee, ['name', 'age', 'position', 'employed', 'hire_date']);
-  
-  if (result.status === 500) {
-    console.error('Failed to create employee:', result.error);
-  } else {
-    console.log('Employee created:', result);
-  }
-}
-```
-
-### 📂 Managing Multiple Tables
-
-Handle multiple tables within the same database seamlessly.
-
-```javascript
-/**
- * Manage multiple tables in the database.
- */
-function manageMultipleTables() {
-  const db = DB.init('MyDatabase');
-
-  // Define configurations for multiple tables
-  const employeeTableConfig = {
-    tableName: "EMPLOYEES",
-    fields: {
-      name: "string",
-      age: "number",
-      position: "string",
-      employed: "boolean",
-      hire_date: "date",
-    }
-  };
-
-  const departmentTableConfig = {
-    tableName: "DEPARTMENTS",
-    fields: {
-      department_name: "string",
-      manager_id: "number",
-      location: "string",
-    }
-  };
-
-  // Create tables
-  db.createTable(employeeTableConfig);
-  db.createTable(departmentTableConfig);
-
-  console.log("Multiple tables created successfully.");
 }
 ```
