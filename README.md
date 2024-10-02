@@ -189,6 +189,68 @@ Using javascript is purely a skill issue, git gud.
 
 ### 2. The way the tables are created
 
+Whenever the library creates tables, it automatically includes two default columns at the beginning: **[ID, DATE]**. The library *expects* that any table included in the schema context **also** begins with these two columns in the sheet.
+
+So, *your sheet* should look like this:
+
+![alt text](image-1.png)
+
+#### Why, you ask?
+
+Well, i found those 2 fields to be pretty useful when using any of the CRUD operations on any table i was making, so i just put them as the default columns on every creation.
+
+#### The important Bit ❗❗
+
+As those fields are the default and are **expected** you **DO NOT** have to declare them when creating the *tableConfig* objects. 
+
+Bad *tableConfig*:
+```javascript
+orderTableConfig = {
+    tableName: "ORDER",
+    historyTableName: "DELETED_ORDER",
+    fields : {
+      id: "number", //shouldn't be here
+      date: "date", //shouldn't be here
+      transaction_id: "number",
+      date_valid: "date",
+      date_arrived: "date",
+      completed: "boolean"
+    }
+  }
+
+```
+
+Expected *tableConfig*
+```javascript
+orderTableConfig = {
+    tableName: "ORDER",
+    historyTableName: "DELETED_ORDER",
+    fields : {
+      transaction_id: "number",
+      date_valid: "date",
+      date_arrived: "date",
+      completed: "boolean"
+    }
+  }
+
+```
+
+### 3. Beware of the Headers
+
+As mentioned, the library expects the **[ID, DATE]** fields to be the first two columns of any table. Additionally, it is important that the tables passed to the schema context adhere to the following conventions:
+
+1. The column headers must be in the first row of the sheet.
+2. All headers should be written in **ALL_CAPS**.
+3. Headers should use **snake_case** for naming (e.g., `date_valid`, `transaction_id`).
+4. The `fields` object in `tableConfig` should follow the **same order** as the columns in the table.
+
+These conventions ensure work as expected.
+
+#### Okay Sergeant Buzzkill, i got it 😒
+
+![alt text](any-more-questions-sergeant-buzz-kill-charlie.gif)
+
+Yes, there are too many caveats, *i know*, but as the library improves, so will it's flexibility. Please be patient or better yet, make a pull request!
 
 
 
