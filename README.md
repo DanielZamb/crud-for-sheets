@@ -110,8 +110,9 @@ function createTables() {
 }
 ```
 
-## Important Caveat for the following Section
+## Important Caveats for the following Section
 
+### 1. Serialization when calling the backend
 AppScript has a bit of a problem with serialization, and as this library attempts (poorly) to manage all the fields with js primitives, when you try to retrieve something from the backend, say a Date, it will not pass anything.
 
 #### Example
@@ -184,7 +185,10 @@ Uncaught SyntaxError: Unexpected token '}', "}" is not valid JSON
 But hey, who did told you to use `javascript`? if you wanted type-safety, better error management and 0 bloat in your code, you should have known better.
 
 #### My personal recomendation
-Using javascript is purely a skill issue, get good.
+Using javascript is purely a skill issue, git gud.
+
+### 2. The way the tables are created
+
 
 
 
@@ -238,10 +242,8 @@ When the tables are in the DB schema, the library will recognize any CRUD operat
 
 Insert new records into your tables. You can also define policies to update existing records based on specific conditions.
 
+Supposing you already have initialized the DB and have some records:
 ```javascript
-/**
- * Add new employees to the EMPLOYEES table.
- */
 const db = DB.init('MyDatabase');
 
 const employees = [
@@ -259,24 +261,32 @@ const employees = [
     employed: true,
     hire_date: new Date('2021-11-05')
   },
-  // Add more employees as needed
 ];
+```
 
+1. First define a Wrapper Function
+```javascript
 function addEmployees(newEmployees) {
-  // Method 2
-  newEmployees.forEach(employee => {
-    const result = db.create('EMPLOYEES', employee, ['name', 'age', 'position', 'employed', 'hire_date']);
-    console.log('Create Result:', result);
-  });
-
-  // OR
-  // Method 1
-  newEmployees.forEach(employee => {
-    const result = db.create(employeeTableConfig.tableName,
-                            employee,
+    // Method 1
+   const result = db.create(employeeTableConfig.tableName,
+                            newEmployees,
                             Object.keys(employeeTableConfig.fields));
-  });
+   // Method 2
+   const result = db.create('EMPLOYEES',
+                           newEmployees,
+                           ['name', 'age', 'position', 'employed', 'hire_date']);  
+   console.log('Create Result:', result);
+   return JSON.stringify(response)
 }
+```
+2. Call the function when needed
+```javascript
+google.script.run
+            .withFailureHandler((err)=>{console.log(err.message}
+            .withSuccessHandler((response) => {
+               response = JSON.parse(response)
+               console.log(response)
+            }).addEmployees(employees)   
 ```
 
 ### 🔍 Reading Records
@@ -316,6 +326,8 @@ function readEmployees() {
 
 Modify existing records in your tables based on their unique ID.
 
+Supose you have and updated employee record:
+
 ```javascript
 const updatedEmployee = {
   name: 'John Doe',
@@ -324,26 +336,39 @@ const updatedEmployee = {
   employed: true,
   hire_date: new Date('2022-01-15')
 };
-
+```
+1. (Again) Define the wrapper function for the update
+```javascript
 /**
  * Update an employee's information.
  */
-function updateEmployee(updatedEmployee, id) {
-
-  // Update employee with ID 1
-  const updateResult = db.update('EMPLOYEES', id, updatedEmployee, ['name', 'age', 'position', 'employed', 'hire_date']);
-
-  const updateResult = db.update(employeeTableConfig.tableName, id, updatedEmployee, Object.keys(employeeTableConfig.fields));
+function updateEmployee(updatedEmployee) {
+   //Method 1
+  const updateResult = db.update(employeeTableConfig.tableName, updatedEmployee.id, updatedEmployee, Object.keys(employeeTableConfig.fields));
   console.log('Update Result:', updateResult);
+
+   // Method 2
+  const updateResult = db.update('EMPLOYEES', updatedEmployee.id, updatedEmployee, ['name', 'age', 'position', 'employed', 'hire_date']);
 
   return JSON.stringify(updateResult);
 }
+```
+
+2. Call it when the function's needed
+```javascript
+google.script.run
+            .withFailureHandler((err)=>{console.log(err.message}
+            .withSuccessHandler((response) => {
+               response = JSON.parse(response)
+               console.log(response)
+            }).updateEmployee(updatedEmployee)   
 ```
 
 ### 🗑️ Deleting Records
 
 Remove records from your tables. Deleted records are *moved* to a history table for tracking purposes.
 
+1. You know the drill
 ```javascript
 /**
  * Delete an employee from the EMPLOYEES table.
@@ -358,6 +383,16 @@ function deleteEmployee(id) {
 
   return JSON.stringify(deleteResult);
 }
+```
+
+2. Call it when needed
+```javascript
+google.script.run
+            .withFailureHandler((err)=>{console.log(err.message}
+            .withSuccessHandler((response) => {
+               response = JSON.parse(response)
+               console.log(response)
+            }).deleteEmployee(4)
 ```
 
 ### 🎨 Applying Color Schemes
@@ -614,11 +649,11 @@ function readPqrsTable(){
  * Update a record in the PQRS table.
  * @param {Object} newPqrs - The updated PQRS data.
  */
-function updatePQRS(newPqrs){
-  console.log(newPqrs);
+function updatePQRS(updatedPqrs){
+  console.log(updatedPqrs);
   const response = db.update(requestTableConfig.tableName,
-                            newPqrs.id,
-                            newPqrs,
+                            updatedPqrs.id,
+                            updatedPqrs,
                             Object.keys(requestTableConfig.fields));
   Logger.log(response);
   return JSON.stringify(response);
@@ -662,11 +697,11 @@ function deleteActionPlan(id){
  * Update an existing Action Plan.
  * @param {Object} newActionPlan - The updated Action Plan data.
  */
-function updateActionPlan(newActionPlan){
-  console.log(newActionPlan);
+function updateActionPlan(updatedActionPlan){
+  console.log(updatedActionPlan);
   const response = db.update(actionTableConfig.tableName,
-                            newActionPlan.id,
-                            newActionPlan,
+                            updatedActionPlan.id,
+                            updatedActionPlan,
                             Object.keys(actionTableConfig.fields));
   Logger.log(response);
   return JSON.stringify(response);
