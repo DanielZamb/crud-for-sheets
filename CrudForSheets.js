@@ -228,7 +228,7 @@ class DB {
           for (const [key, val] of Object.entries(data)) {
             const expectedType = this.tables[tableName][key];
             if (expectedType && !this._checkType(val, expectedType)) {
-              throw new Error(`Type mismatch for field '${key}'. Expected ${expectedType}, got ${typeof value}`);
+              throw new Error(`Type mismatch for field '${key}'. Expected ${expectedType}, got ${typeof val}`);
             }
           }
         }
