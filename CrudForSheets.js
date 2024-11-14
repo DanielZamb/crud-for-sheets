@@ -1,10 +1,3 @@
-function test() {
-  // The code below creates a new spreadsheet "Finances" and logs the URL for it
-  var ssNew = SpreadsheetApp.create("Finances");
-  Logger.log(ssNew.getUrl());
-}
-
-
 /**
  * db class for Google Apps Script
  * Provides methods for Create, Read, Update, and Delete operations on Google Sheets
@@ -13,12 +6,13 @@ function test() {
 class DB {
   /**
    * @param {string} dbName - The name of the Google Spreadsheet to create and operate on.
+   * @param {string} dbId - The id of the Google Spreadsheet if already created.
    */
   constructor(dbName, dbId = null) {
     try {
       let ssId;
       if (!dbId) {
-        let ss = SpreadsheetApp.create(dbName)
+        let ss = SpreadsheetApp.create(dbName);
         ssId = ss.getId();
       } else {
         ssId = dbId;
@@ -29,13 +23,16 @@ class DB {
       this.creationResult = {
         status: 200,
         message: "database initialized successfully",
-      }
+      };
     } catch (err) {
-      console.error(`Something went wrong initializing the DB: ${err.message}`, err.stack);
+      console.error(
+          `Something went wrong initializing the DB: ${err.message}`,
+          err.stack
+      );
       this.creationResult = {
         status: 500,
-        error: err.message
-      }
+        error: err.message,
+      };
     }
   }
 
@@ -48,7 +45,7 @@ class DB {
    * @param {Object} config - Configuration for creating the table.
    * @param {string} config.tableName - Name of the main table.
    * @param {string} [config.historyTableName] - Name of the history table.
-   * @param {Object<column, type>} config.fields - Fields of the table.
+   * @param {Object<columnName, type>} config.fields - Fields of the table.
    */
   createTable(config) {
     try {
@@ -66,10 +63,15 @@ class DB {
         }
       } else {
         historyTable = this.spreadsheet.getSheetByName(`DELETED_${tableName}`);
-        if (!historyTable) historyTable = this.spreadsheet.insertSheet(`DELETED_${tableName}`);
+        if (!historyTable)
+          historyTable = this.spreadsheet.insertSheet(`DELETED_${tableName}`);
       }
 
-      const headers = ['ID', 'DATE', ...Object.keys(fields).map(field => field.toUpperCase())]
+      const headers = [
+        "ID",
+        "DATE",
+        ...Object.keys(fields).map((field) => field.toUpperCase()),
+      ];
 
       mainTable.getRange(1, 1, 1, headers.length).setValues([headers]);
       historyTable.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -77,32 +79,33 @@ class DB {
       this.tables[tableName] = fields;
       return {
         status: 200,
-        message: "table created successfully"
-      }
+        message: "table created successfully",
+      };
     } catch (err) {
-      console.error(`Error when trying to init the database: ${err.message}`)
+      console.error(`Error when trying to init the database: ${err.message}`);
       return {
         status: 500,
-        error: err.message
+        error: err.message,
       };
     }
   }
 
-
-  putTableIntoDbContext(config){
+  putTableIntoDbContext(config) {
     const { tableName, historyTableName, fields } = config;
 
-    if (this.tables[tableName]){
-      console.error(`Error when trying to put table in context of the database: ${err.message}`)
+    if (this.tables[tableName]) {
+      console.error(
+          `Error when trying to put table in context of the database: ${err.message}`
+      );
       return {
         status: 500,
-        error: err.message
+        error: err.message,
       };
     } else {
       this.tables[tableName] = fields;
       return {
         status: 200,
-        message: "Table added to the schema"
+        message: "Table added to the schema",
       };
     }
   }
@@ -127,9 +130,17 @@ class DB {
       // if (!this._validateData(data, keyOrder)) {
       //   throw new Error("Invalid data format");
       // }
-      const validation = this._validateData(data, keyOrder, `in table "${tableName}"`);
+      const validation = this._validateData(
+          data,
+          keyOrder,
+          `in table "${tableName}"`
+      );
       if (!validation.isValid) {
-        throw new Error(`Missing required fields: ${validation.missingKeys.join(', ')} in table "${tableName}"`);
+        throw new Error(
+            `Missing required fields: ${validation.missingKeys.join(
+                ", "
+            )} in table "${tableName}"`
+        );
       }
 
       let typesChecked = false;
@@ -137,7 +148,9 @@ class DB {
         for (const [key, val] of Object.entries(data)) {
           const expectedType = this.tables[tableName][key];
           if (expectedType && !this._checkType(val, expectedType)) {
-            throw new Error(`Type mismatch for field '${key}'. Expected ${expectedType}, got ${typeof val}`);
+            throw new Error(
+                `Type mismatch for field '${key}'. Expected ${expectedType}, got ${typeof val}`
+            );
           }
         }
         typesChecked = true;
@@ -148,16 +161,16 @@ class DB {
 
       if (addUpdatePolicy && addUpdatePolicy.key in data) {
         console.log(
-          "data has matched on the additional update policy:  " +
-          data[addUpdatePolicy.key]
+            "data has matched on the additional update policy:  " +
+            data[addUpdatePolicy.key]
         );
         const columnIndex = keyOrder.indexOf(addUpdatePolicy.key) + 3; // +3 for id, date, and 1-based index
         if (columnIndex > 2) {
           const column = sheet.getRange(2, columnIndex, sheet.getLastRow() - 1);
           const searchResult = column
-            .createTextFinder(addUpdatePolicy.value.toString())
-            .matchEntireCell(true)
-            .findNext();
+              .createTextFinder(addUpdatePolicy.value.toString())
+              .matchEntireCell(true)
+              .findNext();
 
           if (searchResult) {
             existingRowIndex = searchResult.getRow();
@@ -170,17 +183,31 @@ class DB {
 
       if (existingRowIndex > -1) {
         // Update existing Record
-        const updateResult = this.update(tableName, id, data, keyOrder, typesChecked);
+        const updateResult = this.update(
+            tableName,
+            id,
+            data,
+            keyOrder,
+            typesChecked
+        );
         updateResult.action = "updated";
         return updateResult;
       } else {
         const id = this._getNextId(sheet);
-        const row = [id, now, ...keyOrder.map((key) => {
-          const value = data[key]
-          if (value === undefined) return "";
-          if (this.tables[tableName] && this.tables[tableName][key] === "boolean") return value.toString();
-          return value;
-        })];
+        const row = [
+          id,
+          now,
+          ...keyOrder.map((key) => {
+            const value = data[key];
+            if (value === undefined) return "";
+            if (
+                this.tables[tableName] &&
+                this.tables[tableName][key] === "boolean"
+            )
+              return value.toString();
+            return value;
+          }),
+        ];
         sheet.appendRow(row);
 
         this._clearCache(tableName);
@@ -204,9 +231,18 @@ class DB {
    * @param {number} id - ID of the record to update
    * @param {Object} data - New data for the record
    * @param {string[]} keyOrder - Order of keys to be updated
+   * @param typesChecked - Flag indicating if the types of the data are already checked
+   * @param addUpdatePolicy
    * @returns {Object} Status and updated data
    */
-  update(tableName, id, data, keyOrder, typesChecked = false, addUpdatePolicy = null) {
+  update(
+      tableName,
+      id,
+      data,
+      keyOrder,
+      typesChecked = false,
+      addUpdatePolicy = null
+  ) {
     try {
       const sheet = this._getSheet(tableName);
       if (!sheet) throw new Error(`Table ${tableName} not found`);
@@ -218,9 +254,17 @@ class DB {
       //   throw new Error("Invalid data format");
       // }
 
-      const validation = this._validateData(data, keyOrder, `in table "${tableName}"`);
+      const validation = this._validateData(
+          data,
+          keyOrder,
+          `in table "${tableName}"`
+      );
       if (!validation.isValid) {
-        throw new Error(`Missing required fields: ${validation.missingKeys.join(', ')} in table "${tableName}"`);
+        throw new Error(
+            `Missing required fields: ${validation.missingKeys.join(
+                ", "
+            )} in table "${tableName}"`
+        );
       }
 
       if (!typesChecked) {
@@ -228,7 +272,9 @@ class DB {
           for (const [key, val] of Object.entries(data)) {
             const expectedType = this.tables[tableName][key];
             if (expectedType && !this._checkType(val, expectedType)) {
-              throw new Error(`Type mismatch for field '${key}'. Expected ${expectedType}, got ${typeof value}`);
+              throw new Error(
+                  `Type mismatch for field '${key}'. Expected ${expectedType}, got ${typeof val}, value: ${val}`
+              );
             }
           }
         }
@@ -236,16 +282,16 @@ class DB {
 
       if (addUpdatePolicy && addUpdatePolicy.key in data) {
         console.log(
-          "data has matched on the additional update policy:  " +
-          data[addUpdatePolicy.key]
+            "data has matched on the additional update policy:  " +
+            data[addUpdatePolicy.key]
         );
         const columnIndex = keyOrder.indexOf(addUpdatePolicy.key) + 3; // +3 for id, date, and 1-based index
         if (columnIndex > 2) {
           const column = sheet.getRange(2, columnIndex, sheet.getLastRow() - 1);
           const searchResult = column
-            .createTextFinder(addUpdatePolicy.value.toString())
-            .matchEntireCell(true)
-            .findNext();
+              .createTextFinder(addUpdatePolicy.value.toString())
+              .matchEntireCell(true)
+              .findNext();
 
           if (searchResult) {
             rowIndex = searchResult.getRow();
@@ -255,12 +301,20 @@ class DB {
       }
 
       const now = new Date();
-      const updatedRow = [id, now, ...keyOrder.map((key) => {
-        const value = data[key]
-        if (value === undefined) return "";
-        if (this.tables[tableName] && this.tables[tableName][key] === "boolean") return value.toString();
-        return value;
-      })];
+      const updatedRow = [
+        id,
+        now,
+        ...keyOrder.map((key) => {
+          const value = data[key];
+          if (value === undefined) return "";
+          if (
+              this.tables[tableName] &&
+              this.tables[tableName][key] === "boolean"
+          )
+            return value.toString();
+          return value;
+        }),
+      ];
       sheet.getRange(rowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
 
       this._clearCache(tableName);
@@ -268,7 +322,7 @@ class DB {
         status: 200,
         id: id,
         data: data,
-        action: "updated"
+        action: "updated",
       };
     } catch (err) {
       console.error(`Error in update: ${err.message}`);
@@ -293,8 +347,8 @@ class DB {
       if (rowIndex === -1) throw new Error(`Record with ID ${id} not found`);
 
       const row = sheet
-        .getRange(rowIndex, 1, 1, sheet.getLastColumn())
-        .getValues()[0];
+          .getRange(rowIndex, 1, 1, sheet.getLastColumn())
+          .getValues()[0];
 
       const headers = this._getHeaders(sheet);
 
@@ -335,8 +389,8 @@ class DB {
       if (rowIndex === -1) throw new Error(`Record with ID ${id} not found`);
 
       const deletedRow = sheet
-        .getRange(rowIndex, 1, 1, sheet.getLastColumn())
-        .getValues()[0];
+          .getRange(rowIndex, 1, 1, sheet.getLastColumn())
+          .getValues()[0];
       sheet.deleteRow(rowIndex);
 
       const historyId = this._getNextId(historySheet);
@@ -362,6 +416,7 @@ class DB {
    * Get all records from the specified table
    * @param {string} tableName - Name of the sheet/table
    * @param {Object} options - Options for pagination and sorting
+   * @param useCache - Flag that tells the db to use cached records
    * @returns {Object} Status and array of records
    */
   getAll(tableName, options = {}, useCache = true) {
@@ -384,53 +439,53 @@ class DB {
           return {
             status: 200,
             data: [],
-            message: `No data in the table "${tableName}"`
+            message: `No data in the table "${tableName}"`,
           };
         }
 
         data = sheet
-          .getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn())
-          .getValues()
-          .map((row) =>
-            headers.reduce((acc, header, index) => {
-              header = header.toLowerCase();
-              acc[header] = row[index];
-              return acc;
-            }, {})
-          );
-
-        this._setCachedData(cacheKey, data);
+            .getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn())
+            .getValues()
+            .map((row) =>
+                headers.reduce((acc, header, index) => {
+                  header = header.toLowerCase();
+                  acc[header] = row[index];
+                  return acc;
+                }, {})
+            );
+        if (!(data.length > 1000)) {
+          this._setCachedData(cacheKey, data);
+        }
       }
 
       if (options.sortBy) {
         const sortField = options.sortBy;
         const sortOrder = options.sortOrder === "desc" ? -1 : 1;
         const fieldType = this.tables[tableName][sortField];
-        console.log("fieldTypes", this.tables[tableName])
+        console.log("fieldTypes", this.tables[tableName]);
         if (fieldType) {
           data.sort((a, b) => {
             // console.log(a);
             let compareOperator;
             switch (fieldType) {
-              case 'number':
+              case "number":
                 compareOperator = a[sortField] - b[sortField];
                 break;
-              case 'string':
+              case "string":
                 compareOperator = a[sortField].localeCompare(b[sortField]);
                 break;
-              case 'boolean':
+              case "boolean":
                 if (a[sortField] && !b[sortField]) {
                   compareOperator = -1;
-                }
-                else if (!a[sortField] && b[sortField]) {
+                } else if (!a[sortField] && b[sortField]) {
                   compareOperator = 1;
-                }
-                else {
+                } else {
                   compareOperator = 0;
                 }
                 break;
-              case 'date':
-                compareOperator = a[sortField].getTime() - b[sortField].getTime();
+              case "date":
+                compareOperator =
+                    a[sortField].getTime() - b[sortField].getTime();
                 break;
               default:
                 throw new Error(`Unsupported sort field type: ${fieldType}`);
@@ -452,17 +507,431 @@ class DB {
         const startIndex = (page - 1) * pageSize;
         data = data.slice(startIndex, startIndex + pageSize);
         message += ` (Page ${page}, ${pageSize} items per page)`;
-
       }
 
       return {
         status: 200,
         data: data,
-        message: message
+        message: message,
       };
-
     } catch (err) {
       console.error(`Error in getAll: ${err.message}`);
+      return {
+        status: 500,
+        error: err.message,
+      };
+    }
+  }
+
+  getRelatedRecordsWithFilter(
+      foreignKey,
+      tableName,
+      field,
+      fieldIndex,
+      options = {},
+      useCache = false
+  ) {
+    try {
+      let message = "Related Data retrieved successfully";
+      const sheet = this._getSheet(tableName);
+
+      if (!(typeof foreignKey === "number"))
+        throw new Error(`Foreign key (${foreignKey}) is not a number!`);
+
+      if (!sheet) {
+        throw new Error(`Table "${tableName}" not found`)
+      } else {
+        console.log(`Table found: ${sheet.getName()}`);
+      }
+
+      if (!this.tables[tableName][field]){
+        throw new Error(`Query field (${field}) does NOT exists in the table.`);
+      }
+
+      const cacheKey = `${tableName}_FK_${foreignKey}_all`;
+      let relatedData;
+
+      if (useCache) {
+        relatedData = this._getCachedData(cacheKey).filter((record) => {
+          return record[field] === foreignKey;
+        });
+      }
+
+      if (!relatedData) {
+        const headers = this._getHeaders(sheet);
+
+        if (sheet.getLastRow() === 1) {
+          return {
+            status: 200,
+            data: [],
+            message: `No Data in the Table "${tableName}"`,
+          };
+        }
+        console.log("queried column: ", headers[fieldIndex])
+        relatedData = sheet
+            .getRange(2, 1, sheet.getLastRow(), sheet.getLastColumn())
+            .getValues()
+            .filter((row) => {
+              // console.log("row analizada")
+              return row[fieldIndex] === foreignKey;
+            })
+            .map((row) => {
+              return headers.reduce((acc, header, index) => {
+                header = header.toLowerCase();
+                acc[header] = row[index];
+                return acc;
+              }, {});
+            });
+        if (relatedData.length <= 1000) {
+          this._setCachedData(cacheKey, relatedData);
+        }
+      }
+
+      if (options.sortBy) {
+        const sortField = options.sortBy;
+        const sortOrder = options.sortOrder === "desc" ? -1 : 1;
+        const fieldType = this.tables[tableName][sortField];
+        console.log("fieldTypes", this.tables[tableName]);
+
+        if (fieldType) {
+          relatedData.sort((a, b) => {
+            let compareOperator;
+
+            switch (fieldType) {
+              case "number":
+                compareOperator = a[sortField] - b[sortField];
+                break;
+              case "string":
+                compareOperator = a[sortField].localeCompare(b[sortField]);
+                break;
+              case "boolean":
+                if (a[sortField] && !b[sortField]) {
+                  compareOperator = -1;
+                } else if (!a[sortField] && b[sortField]) {
+                  compareOperator = 1;
+                } else {
+                  compareOperator = 0;
+                }
+                break;
+              case "date":
+                compareOperator =
+                    a[sortField].getTime() - b[sortField].getTime();
+                break;
+              default:
+                throw new Error(`Unsupported sort field type: ${fieldType}`);
+            }
+
+            return compareOperator * sortOrder;
+          });
+          message = `Related Data Sorted Successfully by '${sortField}'`;
+        } else {
+          message = `Warning: Sorting not applied. Field '${sortField}' not found in table schema.`;
+        }
+      }
+
+      if (options.page && options.pageSize) {
+        const page = parseInt(options.page);
+        const pageSize = parseInt(options.pageSize);
+        if (isNaN(page) || isNaN(pageSize) || page < 1 || pageSize < 1) {
+          throw new Error("Invalid pagination parameters");
+        }
+
+        const startIndex = (page - 1) * pageSize;
+        relatedData = relatedData.slice(startIndex, startIndex + pageSize);
+        message += `(Page ${page}, ${pageSize} items per page)`;
+      }
+
+      return {
+        status: 200,
+        data: relatedData,
+        message: message,
+      };
+    } catch (err) {
+      console.error(`Error in fetchRelatedRecords: ${err.message}`);
+      return {
+        status: 500,
+        error: err.message,
+      };
+    }
+  }
+
+  getRelatedRecords(
+      foreignKey,
+      tableName,
+      field,
+      fieldIndex,
+      options = {},
+      useCache = false
+  ) {
+    try {
+      let message = "Related Data retrieved successfully";
+      const sheet = this._getSheet(tableName);
+
+      if (!(typeof foreignKey === "number"))
+        throw new Error(`Foreign key (${foreignKey}) is not a number!`);
+
+      if (!sheet) {
+        throw new Error(`Table "${tableName}" not found`)
+      } else {
+        console.log(`Table found: ${sheet.getName()}`);
+      }
+
+      if (!this.tables[tableName][field]){
+        throw new Error(`Query field (${field}) does NOT exists in the table.`);
+      }
+
+      const cacheKey = `${tableName}_FK_${foreignKey}_all`;
+      let relatedData;
+
+      if (useCache) {
+        relatedData = this._getCachedData(cacheKey).filter((record) => {
+          return record[field] === foreignKey;
+        });
+      }
+
+      if (!relatedData) {
+        const headers = this._getHeaders(sheet);
+
+        if (sheet.getLastRow() === 1) {
+          return {
+            status: 200,
+            data: [],
+            message: `No Data in the Table "${tableName}"`,
+          };
+        }
+        console.log("queried column: ", headers[fieldIndex])
+        relatedData = sheet
+            .getRange(2, 1, sheet.getLastRow(), sheet.getLastColumn())
+            .getValues()
+        let finalData = [];
+        for (let i=0;i<relatedData.length; i++){
+          let row = relatedData[i];
+          let obj = {}
+          if (row[fieldIndex] === foreignKey){
+            // console.log("row que si paso", row)
+            for (let j=0; j<headers.length; j++){
+              let header = headers[j].toLowerCase();
+              obj[header] = row[j];
+            }
+            finalData.push(obj)
+          }
+        }
+        relatedData = finalData;
+        if (relatedData.length <= 1000) {
+          this._setCachedData(cacheKey, relatedData);
+        }
+      }
+
+      if (options.sortBy) {
+        const sortField = options.sortBy;
+        const sortOrder = options.sortOrder === "desc" ? -1 : 1;
+        const fieldType = this.tables[tableName][sortField];
+        console.log("fieldTypes", this.tables[tableName]);
+
+        if (fieldType) {
+          relatedData.sort((a, b) => {
+            let compareOperator;
+
+            switch (fieldType) {
+              case "number":
+                compareOperator = a[sortField] - b[sortField];
+                break;
+              case "string":
+                compareOperator = a[sortField].localeCompare(b[sortField]);
+                break;
+              case "boolean":
+                if (a[sortField] && !b[sortField]) {
+                  compareOperator = -1;
+                } else if (!a[sortField] && b[sortField]) {
+                  compareOperator = 1;
+                } else {
+                  compareOperator = 0;
+                }
+                break;
+              case "date":
+                compareOperator =
+                    a[sortField].getTime() - b[sortField].getTime();
+                break;
+              default:
+                throw new Error(`Unsupported sort field type: ${fieldType}`);
+            }
+
+            return compareOperator * sortOrder;
+          });
+          message = `Related Data Sorted Successfully by '${sortField}'`;
+        } else {
+          message = `Warning: Sorting not applied. Field '${sortField}' not found in table schema.`;
+        }
+      }
+
+      if (options.page && options.pageSize) {
+        const page = parseInt(options.page);
+        const pageSize = parseInt(options.pageSize);
+        if (isNaN(page) || isNaN(pageSize) || page < 1 || pageSize < 1) {
+          throw new Error("Invalid pagination parameters");
+        }
+
+        const startIndex = (page - 1) * pageSize;
+        relatedData = relatedData.slice(startIndex, startIndex + pageSize);
+        message += `(Page ${page}, ${pageSize} items per page)`;
+      }
+
+      return {
+        status: 200,
+        data: relatedData,
+        message: message,
+      };
+    } catch (err) {
+      console.error(`Error in fetchRelatedRecords: ${err.message}`);
+      return {
+        status: 500,
+        error: err.message,
+      };
+    }
+  }
+
+  getRelatedRecordsWithTextFinder(
+      foreignKey,
+      tableName,
+      field,
+      fieldIndex,
+      options = {},
+      useCache = false
+  ) {
+    try {
+      let message = "Related Data retrieved successfully";
+      const sheet = this._getSheet(tableName);
+
+      if (!(typeof foreignKey === "number"))
+        throw new Error(`Foreign key (${foreignKey}) is not a number!`);
+
+      if (!sheet) throw new Error(`Table "${tableName}" not found`);
+
+      const cacheKey = `${tableName}_FK_${foreignKey}_all`;
+      let relatedData;
+
+      if (useCache) {
+        relatedData = this._getCachedData(cacheKey).filter((record) => {
+          return record[field] === foreignKey;
+        });
+      }
+
+      if (!relatedData) {
+        const headers = this._getHeaders(sheet);
+        const lastRow = sheet.getLastRow();
+        const lastColumn = sheet.getLastColumn();
+        relatedData = [];
+        if (sheet.getLastRow() === 1) {
+          return {
+            status: 200,
+            data: [],
+            message: `No Data in the Table "${tableName}"`,
+          };
+        }
+
+        const dataRange = sheet.getRange(2, 1, lastRow - 1, lastColumn);
+        const allData = dataRange.getValues();
+
+        const searchColumnRange = sheet.getRange(2, fieldIndex + 1, lastRow - 1, 1);
+        const textFinder = searchColumnRange.createTextFinder(foreignKey.toString())
+            .matchEntireCell(true)
+            .matchCase(false);
+        const matchedRanges = textFinder.findAll();
+
+        if (matchedRanges.length === 0) {
+          return {
+            status: 200,
+            data: [],
+            message: `No related records found for foreign key ${foreignKey}`,
+          };
+        }
+
+        const rowIndicesSet = new Set();
+        matchedRanges.forEach((range) => {
+          rowIndicesSet.add(range.getRow());
+        });
+        // console.log("set of indices",rowIndicesSet)
+        const rowIndices = Array.from(rowIndicesSet).sort((a, b) => a - b);
+        // console.log("array of indices ordered",rowIndices)
+
+        // const rowIndices = matchedRanges.map((range) => range.getRow()).sort((a, b) => a - b);
+        const filteredRows = rowIndices.map((row) => allData[row - 2]);
+
+        relatedData = filteredRows.map((row) => {
+          headers.reduce((acc, header, index) => {
+            header = header.toLowerCase();
+            acc[header] = row[index];
+            return acc;
+          }, {});
+        });
+
+
+        if (relatedData.length <= 1000) {
+          this._setCachedData(cacheKey, relatedData);
+        }
+      }
+
+      if (options.sortBy) {
+        const sortField = options.sortBy;
+        const sortOrder = options.sortOrder === "desc" ? -1 : 1;
+        const fieldType = this.tables[tableName][sortField];
+        console.log("fieldTypes", this.tables[tableName]);
+
+        if (fieldType) {
+          relatedData.sort((a, b) => {
+            let compareOperator;
+
+            switch (fieldType) {
+              case "number":
+                compareOperator = a[sortField] - b[sortField];
+                break;
+              case "string":
+                compareOperator = a[sortField].localeCompare(b[sortField]);
+                break;
+              case "boolean":
+                if (a[sortField] && !b[sortField]) {
+                  compareOperator = -1;
+                } else if (!a[sortField] && b[sortField]) {
+                  compareOperator = 1;
+                } else {
+                  compareOperator = 0;
+                }
+                break;
+              case "date":
+                compareOperator =
+                    a[sortField].getTime() - b[sortField].getTime();
+                break;
+              default:
+                throw new Error(`Unsupported sort field type: ${fieldType}`);
+            }
+
+            return compareOperator * sortOrder;
+          });
+          message = `Related Data Sorted Successfully by '${sortField}'`;
+        } else {
+          message = `Warning: Sorting not applied. Field '${sortField}' not found in table schema.`;
+        }
+      }
+
+      if (options.page && options.pageSize) {
+        const page = parseInt(options.page);
+        const pageSize = parseInt(options.pageSize);
+        if (isNaN(page) || isNaN(pageSize) || page < 1 || pageSize < 1) {
+          throw new Error("Invalid pagination parameters");
+        }
+
+        const startIndex = (page - 1) * pageSize;
+        relatedData = relatedData.slice(startIndex, startIndex + pageSize);
+        message += `(Page ${page}, ${pageSize} items per page)`;
+      }
+
+      return {
+        status: 200,
+        data: relatedData,
+        message: message,
+      };
+    } catch (err) {
+      console.error(`Error in fetchRelatedRecords: ${err.message}`);
       return {
         status: 500,
         error: err.message,
@@ -480,7 +949,7 @@ class DB {
 
   _getNextId(sheet) {
     const lastRow = sheet.getLastRow();
-    console.log(lastRow)
+    console.log(lastRow);
     if (lastRow <= 1) return 1;
 
     const idRange = sheet.getRange("A:A");
@@ -512,10 +981,10 @@ class DB {
   _findRowById(sheet, id) {
     const idRange = sheet.getRange("A:A");
     const searchResult = idRange
-      .createTextFinder(id.toString())
-      .matchEntireCell(true)
-      .matchCase(false)
-      .findNext();
+        .createTextFinder(id.toString())
+        .matchEntireCell(true)
+        .matchCase(false)
+        .findNext();
     return searchResult ? searchResult.getRow() : -1;
   }
 
@@ -523,7 +992,7 @@ class DB {
   //   return keyOrder.every((key) => key in data);
   // }
 
-   /**
+  /**
    * Validates that all required keys are present in the data object.
    * @param {Object} data - The data object to validate.
    * @param {string[]} keyOrder - An array of required keys.
@@ -531,7 +1000,7 @@ class DB {
    * @returns {Object} - An object containing validation status and missing keys.
    */
   _validateData(data, keyOrder, context = "") {
-    const missingKeys = keyOrder.filter(key => !(key in data));
+    const missingKeys = keyOrder.filter((key) => !(key in data));
     const isValid = missingKeys.length === 0;
     return { isValid, missingKeys, context };
   }
@@ -545,7 +1014,19 @@ class DB {
       case "boolean":
         return typeof value === "boolean";
       case "date":
-        return value instanceof Date && !isNaN(value.getTime());
+        // console.log("chequeo de tipo date", value instanceof Date)
+        console.log(
+            "chequeo de que getTime() es un numero",
+            !isNaN(value.getTime())
+        );
+        console.log(
+            "chequeo de que es tipo date por otro metodo",
+            Object.prototype.toString.call(value) === "[object Date]"
+        );
+        return (
+            Object.prototype.toString.call(value) === "[object Date]" &&
+            !isNaN(value.getTime())
+        );
       default:
         return false;
     }
@@ -558,37 +1039,39 @@ class DB {
     // Define multiple color schemes
     const colorSchemes = {
       red: {
-        headerColor: "#E53935",    // Red header
-        color1: "#FFCDD2",         // Light Red for alternating rows
-        color2: "#FFEBEE"          // Lighter Red
+        headerColor: "#E53935", // Red header
+        color1: "#FFCDD2", // Light Red for alternating rows
+        color2: "#FFEBEE", // Lighter Red
       },
       blue: {
-        headerColor: "#1E88E5",    // Blue header
-        color1: "#BBDEFB",         // Light Blue for alternating rows
-        color2: "#E3F2FD"          // Lighter Blue
+        headerColor: "#1E88E5", // Blue header
+        color1: "#BBDEFB", // Light Blue for alternating rows
+        color2: "#E3F2FD", // Lighter Blue
       },
       green: {
-        headerColor: "#43A047",    // Green header
-        color1: "#C8E6C9",         // Light Green for alternating rows
-        color2: "#E8F5E9"          // Lighter Green
+        headerColor: "#43A047", // Green header
+        color1: "#C8E6C9", // Light Green for alternating rows
+        color2: "#E8F5E9", // Lighter Green
       },
       orange: {
-        headerColor: "#FB8C00",    // Orange header
-        color1: "#FFE0B2",         // Light Orange for alternating rows
-        color2: "#FFF3E0"          // Lighter Orange
+        headerColor: "#FB8C00", // Orange header
+        color1: "#FFE0B2", // Light Orange for alternating rows
+        color2: "#FFF3E0", // Lighter Orange
       },
       purple: {
-        headerColor: "#8E24AA",    // Purple header
-        color1: "#E1BEE7",         // Light Purple for alternating rows
-        color2: "#F3E5F5"          // Lighter Purple
-      }
+        headerColor: "#8E24AA", // Purple header
+        color1: "#E1BEE7", // Light Purple for alternating rows
+        color2: "#F3E5F5", // Lighter Purple
+      },
     };
 
     // Get the chosen color scheme based on the input
     const scheme = colorSchemes[colorScheme];
 
     if (!scheme) {
-      throw new Error("Color scheme not found. Available schemes: red, blue, green, orange, purple.");
+      throw new Error(
+          "Color scheme not found. Available schemes: red, blue, green, orange, purple."
+      );
     }
 
     // Apply color to the header row
@@ -605,34 +1088,36 @@ class DB {
       }
     }
   }
-
 }
 
 /**
-* Creates and returns a new instance of the CRUD class
-* @param {string} spreadsheetId - The ID of the Google Spreadsheet to operate on
-* @returns {CRUD} A new instance of the CRUD class
-*/
+ * Creates and returns a new instance of the CRUD class
+ * @returns {DB} A new instance of the CRUD class
+ * @param dbName - Name of the Database
+ * @param dbId - id of the sheet if already created
+ */
 function init(dbName, dbId = "") {
   return new DB(dbName, dbId);
 }
 
-
 function example() {
-  const db = new DB('myTestDataBase', dbId="1auvs768mjQQS9dTJuutCOpYKvWTSUjtPmzzZCSZBM1M");
+  const db = new DB(
+      "myTestDataBase",
+      (dbId = "1auvs768mjQQS9dTJuutCOpYKvWTSUjtPmzzZCSZBM1M")
+  );
 
   console.log(db.getCreationResult());
 
   const employeeTableConfig = {
     tableName: "EMPLOYEES",
     fields: {
-       name: "string" ,
-       age: "number" ,
-       position: "string" ,
-       employed: "boolean" ,
-       hire_date: "date" ,
-    }
-  }
+      name: "string",
+      age: "number",
+      position: "string",
+      employed: "boolean",
+      hire_date: "date",
+    },
+  };
 
   db.createTable(employeeTableConfig);
 
@@ -640,108 +1125,126 @@ function example() {
 
   const employees = [
     {
-      name: 'John Doe',
+      name: "John Doe",
       age: 30,
-      position: 'Software Engineer',
+      position: "Software Engineer",
       employed: true,
-      hire_date: new Date('2022-01-15')
-    }, {
-      name: 'Jane Smith',
+      hire_date: new Date("2022-01-15"),
+    },
+    {
+      name: "Jane Smith",
       age: 28,
-      position: 'Product Manager',
+      position: "Product Manager",
       employed: true,
-      hire_date: new Date('2021-11-05')
-    }, {
-      name: 'Mike Johnson',
+      hire_date: new Date("2021-11-05"),
+    },
+    {
+      name: "Mike Johnson",
       age: 35,
-      position: 'Data Scientist',
+      position: "Data Scientist",
       employed: true,
-      hire_date: new Date('2020-08-20')
-    }, {
-      name: 'Emily Davis',
+      hire_date: new Date("2020-08-20"),
+    },
+    {
+      name: "Emily Davis",
       age: 24,
-      position: 'UX Designer',
+      position: "UX Designer",
       employed: false,
-      hire_date: new Date('2019-02-01')
-    }, {
-      name: 'Chris Lee',
+      hire_date: new Date("2019-02-01"),
+    },
+    {
+      name: "Chris Lee",
       age: 40,
-      position: 'Operations Manager',
+      position: "Operations Manager",
       employed: true,
-      hire_date: new Date('2020-12-10')
-    }, {
-      name: 'Sarah Wilson',
+      hire_date: new Date("2020-12-10"),
+    },
+    {
+      name: "Sarah Wilson",
       age: 33,
-      position: 'HR Specialist',
+      position: "HR Specialist",
       employed: true,
-      hire_date: new Date('2018-06-18')
-    }, {
-      name: 'Alex Martin',
+      hire_date: new Date("2018-06-18"),
+    },
+    {
+      name: "Alex Martin",
       age: 29,
-      position: 'Business Analyst',
+      position: "Business Analyst",
       employed: false,
-      hire_date: new Date('2021-04-25')
-    }, {
-      name: 'Linda Clark',
+      hire_date: new Date("2021-04-25"),
+    },
+    {
+      name: "Linda Clark",
       age: 42,
-      position: 'Accountant',
+      position: "Accountant",
       employed: true,
-      hire_date: new Date('2021-09-30')
-    }, {
-      name: 'James Walker',
+      hire_date: new Date("2021-09-30"),
+    },
+    {
+      name: "James Walker",
       age: 27,
-      position: 'DevOps Engineer',
+      position: "DevOps Engineer",
       employed: true,
-      hire_date: new Date('2017-07-19')
-    }, {
-      name: 'Jessica Brown',
+      hire_date: new Date("2017-07-19"),
+    },
+    {
+      name: "Jessica Brown",
       age: 26,
-      position: 'Marketing Manager',
+      position: "Marketing Manager",
       employed: false,
-      hire_date: new Date('2022-03-22')
-    }, {
-      name: 'Robert Harris',
+      hire_date: new Date("2022-03-22"),
+    },
+    {
+      name: "Robert Harris",
       age: 37,
-      position: 'Network Engineer',
+      position: "Network Engineer",
       employed: true,
-      hire_date: new Date('2021-01-11')
-    }, {
-      name: 'Sophia Lewis',
+      hire_date: new Date("2021-01-11"),
+    },
+    {
+      name: "Sophia Lewis",
       age: 31,
-      position: 'Backend Developer',
+      position: "Backend Developer",
       employed: true,
-      hire_date: new Date('2020-05-15')
-    }, {
-      name: 'Lucas Moore',
+      hire_date: new Date("2020-05-15"),
+    },
+    {
+      name: "Lucas Moore",
       age: 34,
-      position: 'Frontend Developer',
+      position: "Frontend Developer",
       employed: false,
-      hire_date: new Date('2022-02-17')
-    }, {
-      name: 'Olivia Taylor',
+      hire_date: new Date("2022-02-17"),
+    },
+    {
+      name: "Olivia Taylor",
       age: 25,
-      position: 'QA Engineer',
+      position: "QA Engineer",
       employed: true,
-      hire_date: new Date('2020-10-27')
-    }, {
-      name: 'Daniel Anderson',
+      hire_date: new Date("2020-10-27"),
+    },
+    {
+      name: "Daniel Anderson",
       age: 38,
-      position: 'System Administrator',
+      position: "System Administrator",
       employed: true,
-      hire_date: new Date('2019-11-09')
+      hire_date: new Date("2019-11-09"),
     },
   ];
   // let results = []
   // for (e of employees) {
   //   results.push(db.create('EMPLOYEES', e, ['name', 'age', 'position', 'employed', 'hire_date']));
   // }
-  db.create('EMPLOYEES', {
-    name: "hola",
-    age: 25,
-    position: 'QA Engineer',
-    employed: "true",
-    hire_date: new Date('2020-10-27')
-  }, ['name', 'age', 'position', 'employed', 'hire_date'])
+  db.create(
+      "EMPLOYEES",
+      {
+        name: "hola",
+        age: 25,
+        position: "QA Engineer",
+        employed: "true",
+        hire_date: new Date("2020-10-27"),
+      },
+      ["name", "age", "position", "employed", "hire_date"]
+  );
   // console.log('Create Result: ', results);
 
   // Read an employee by ID
@@ -761,15 +1264,12 @@ function example() {
   // const deleteResult = db.remove('EMPLOYEES', 'DELETED_EMPLOYEES', createResult.id);
   // console.log('Delete Result:', deleteResult);
   // Get All with pagination and sorting
-  const getAllResult = db.getAll('EMPLOYEES', 
-                                              { page: 1, 
-                                                pageSize: 25, 
-                                                sortBy: 'hire_date', 
-                                                sortOrder: 'desc'
-                                                }, 
-                                                useCache=false);
+  const getAllResult = db.getAll(
+      "EMPLOYEES",
+      { page: 1, pageSize: 25, sortBy: "hire_date", sortOrder: "desc" },
+      (useCache = false)
+  );
   console.log(getAllResult);
-
 
   // getAllResult.data.map((row) => {
   //    console.log(row)
@@ -781,5 +1281,4 @@ function example() {
   //       }
   //     }
   // })
-
 }
