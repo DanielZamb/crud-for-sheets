@@ -12,7 +12,7 @@ class DB {
     try {
       let ssId;
       if (!dbId) {
-        let ss = SpreadsheetApp.create(dbName);
+        let ss = SpreadsheetApp.create(dbName)
         ssId = ss.getId();
       } else {
         ssId = dbId;
@@ -23,7 +23,7 @@ class DB {
       this.creationResult = {
         status: 200,
         message: "database initialized successfully",
-      };
+      }
     } catch (err) {
       console.error(
           `Something went wrong initializing the DB: ${err.message}`,
@@ -89,6 +89,7 @@ class DB {
       };
     }
   }
+
 
   putTableIntoDbContext(config) {
     const { tableName, historyTableName, fields } = config;
@@ -1088,6 +1089,7 @@ class DB {
       }
     }
   }
+
 }
 
 /**
@@ -1218,7 +1220,7 @@ function example() {
     {
       name: "Olivia Taylor",
       age: 25,
-      position: "QA Engineer",
+      position: 'QA Engineer',
       employed: true,
       hire_date: new Date("2020-10-27"),
     },
