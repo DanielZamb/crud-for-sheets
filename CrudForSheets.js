@@ -24,6 +24,13 @@ class DB {
         status: 200,
         message: "database initialized successfully",
       }
+      //script lock
+      this.lockService = LockService.getScriptLock();
+      //userlock
+      this.userLockService = LockService.getUserLock();
+      this.activeLocks = new Map();
+      this.lockTimeout = 200;
+      this.readLockTimeout = 30000;
     } catch (err) {
       console.error(
           `Something went wrong initializing the DB: ${err.message}`,
@@ -33,6 +40,66 @@ class DB {
         status: 500,
         error: err.message,
       };
+    }
+  }
+
+  _acquireLock(tableName, recordId, lockType){
+    try{
+      // create the lock key
+      const lockKey = `${tableName}_${recordId}_${lockType}`;
+      // try to acquire the lock for 30s
+      if (this.activeLocks.has(lockKey)){
+        console.log(`[LOCK] Already holding lock for ${lockKey}`);
+        return false;
+      }
+      let lock = false;
+
+      if (lockType === 'write'){
+        lock = this.lockService.tryLock(this.lockTimeout);
+      } else if (lockType === 'read'){
+        lock = this.lockService.tryLock(this.readLockTimeout);
+      }
+
+
+      if (lock){
+        this.activeLocks.set(lockKey,true);
+        console.log(`[LOCK] Acquired ${lockType} lock for record ${recordId} in table ${tableName}`);
+        return true;
+      } else {
+        console.warn(`[LOCK] Failed to acquire ${lockType} lock for record ${recordId} in table ${tableName}`);
+        return false;
+      }
+    } catch(err) {
+      console.error(`[LOCK] Error acquiring lock: ${err.stack}`);
+      return false;
+    }
+  }
+
+  _releaseLock(tableName, recordId, lockType){
+    try{
+      const lockKey = `${tableName}_${recordId}_${lockType}`;
+      if (this.activeLocks.has(lockKey)){
+        Utilities.sleep(400);
+        this.lockService.releaseLock();
+        this.activeLocks.delete(lockKey);
+        console.log(`[LOCK] Released ${lockType} lock for record ${recordId} in table ${tableName}`);
+      } else {
+        console.warn(`[LOCK] Attempted to release unheld lock: ${lockKey}`);
+      }
+    }catch(err){
+      console.error(`[LOCK] Error releasing lock: ${err.stack}`);
+    }
+  }
+
+  releaseLocks() {
+    try {
+      if (this.activeLocks.size > 0) {
+        this.lockService.releaseLock();
+        this.activeLocks.clear();
+        console.log('[LOCK] Released all locks');
+      }
+    } catch (err) {
+      console.error(`[LOCK] Error in releaseLocks: ${err.stack}`);
     }
   }
 
@@ -90,17 +157,79 @@ class DB {
     }
   }
 
+  /**
+   * Creates configuration for a many-to-many junction table
+   * @param {Object} config Configuration object
+   * @param {string} config.tableName Name of the junction table
+   * @param {string} config.historyTableName Name of the history table
+   * @param {string} config.entity1TableName Name of the first entity table
+   * @param {string} config.entity2TableName Name of the second entity table
+   * @param {Object} [config.fieldsRelatedToBothEntities] Additional fields that describe the relationship
+   * @returns {Object} Table configuration object
+   */
+  createManyToManyTableConfig(config) {
+    try {
+      const { entity1TableName, entity2TableName, fieldsRelatedToBothEntities } = config;
 
+      if (!entity1TableName || !entity2TableName) {
+        throw new Error('Required fields missing: tableName, entity1TableName, and entity2TableName are required');
+      }
+
+      //check if the 2 entities are in schema context
+      if (!this.tables[entity1TableName] || !this.tables[entity2TableName]) {
+        throw new Error(
+            `Tables must be in schema context before creating relation. ` +
+            `${entity1TableName} exists: ${!!this.tables[entity1TableName]}, ` +
+            `${entity2TableName} exists: ${!!this.tables[entity2TableName]}`
+        );
+      }
+
+      this._checkValidCreationTypes(fieldsRelatedToBothEntities)
+
+      return {
+        status: 200,
+        data: {
+          tableName: `${entity1TableName}_${entity2TableName}_RELATION`,
+          historyTableName: `DELETED_${entity1TableName}_${entity2TableName}_RELATION`,
+          fields: {
+            created_at: "date",
+            [`${entity1TableName.toLocaleLowerCase()}_id`]: 'number',
+            [`${entity2TableName.toLocaleLowerCase()}_id`]: 'number',
+            ...fieldsRelatedToBothEntities,
+          }
+        },
+        message: `config object for Junction table ${entity1TableName}_${entity2TableName}_RELATION, dont forget to put the tableConfig into schema context`
+      }
+    } catch (err) {
+      console.error(`Error in createManyToManyTableConfig: ${err.stack}`);
+      return {
+        status: 500,
+        error: {
+          message: err.message,
+          stackTrace: err.stack
+        }
+      }
+    }
+  }
+
+
+  /**
+   * Adds a table to the database context
+   * @param {Object} config - Table configuration object
+   * @param {string} config.tableName - Name of the table
+   * @param {Object} config.fields - Field definitions for the table
+   * @returns {Object} Status of the operation
+   */
   putTableIntoDbContext(config) {
     const { tableName, historyTableName, fields } = config;
 
     if (this.tables[tableName]) {
       console.error(
-          `Error when trying to put table in context of the database: ${err.message}`
+          `Error when trying to put table in context of the database: Already in context`
       );
       return {
         status: 500,
-        error: err.message,
+        error:"Error when trying to put table in context of the database: Already in context",
       };
     } else {
       this.tables[tableName] = fields;
@@ -134,13 +263,13 @@ class DB {
       const validation = this._validateData(
           data,
           keyOrder,
-          `in table "${tableName}"`
+          `for table "${tableName}"`
       );
       if (!validation.isValid) {
         throw new Error(
             `Missing required fields: ${validation.missingKeys.join(
                 ", "
-            )} in table "${tableName}"`
+            )} for table "${tableName}"`
         );
       }
 
@@ -183,16 +312,23 @@ class DB {
       const now = new Date();
 
       if (existingRowIndex > -1) {
-        // Update existing Record
-        const updateResult = this.update(
-            tableName,
-            id,
-            data,
-            keyOrder,
-            typesChecked
-        );
-        updateResult.action = "updated";
-        return updateResult;
+        //acquiring lock!!
+        if (!this._acquireLock(tableName, id, 'write')){
+          throw new Error('Could not acquire lock for update operation')
+        }
+        try{
+          const updateResult = this.update(
+              tableName,
+              id,
+              data,
+              keyOrder,
+              typesChecked
+          );
+          updateResult.action = "updated";
+          return updateResult;
+        } finally {
+          this._releaseLock(tableName, id, 'write');
+        }
       } else {
         const id = this._getNextId(sheet);
         const row = [
@@ -226,6 +362,374 @@ class DB {
       };
     }
   }
+
+  /**
+   * Creates a record in a junction table for many-to-many relationships
+   * @param {string} junctionTableName - Name of the junction table
+   * @param {Object} data - Data containing the foreign keys and additional fields
+   * @param {string[]} keyOrder - Order of keys to be inserted
+   * @returns {Object} Status and ID of the created junction record
+   */
+  createJunctionRecord(junctionTableName, data, keyOrder) {
+    try {
+      const table = this._getSheet(junctionTableName);
+      if (!table) {
+        throw new Error(`Junction table '${junctionTableName}' not found`);
+      }
+
+      const headers = this._getHeaders(table);
+      if (!headers || !headers.length) {
+        throw new Error(`Could not retrieve headers for table '${junctionTableName}'`);
+      }
+
+      // Validate we have exactly two foreign keys
+      const checkDimension = Object.keys(data).length === 2;
+      if (!checkDimension) {
+        throw new Error('Junction table must have exactly two foreign key fields');
+      }
+
+      // Get foreign key field names and their indices
+      let entityTableNames = keyOrder.filter(item => item.endsWith("_id"));
+      console.log("entity table names no cleaning:", entityTableNames);
+
+      const entityFkIndices = entityTableNames.map(fieldName => headers.indexOf(fieldName.toUpperCase()));
+      console.log("fk column indices:", entityFkIndices);
+
+      // Validate all foreign key columns were found
+      if (entityFkIndices.includes(-1)) {
+        throw new Error('One or more foreign key columns not found in headers');
+      }
+
+      // Clean table names by removing _id suffix
+      entityTableNames = entityTableNames.map(item => item.replace(/_id$/, ""));
+      console.log("entity table names:", entityTableNames);
+
+      // Collect and validate foreign keys
+      const fksIds = [];
+      for (const tableName of entityTableNames) {
+        const id_field = `${tableName}_id`;
+        const recordId = data[id_field];
+        fksIds.push(recordId);
+
+        const response = this.read(tableName.toUpperCase(), recordId);
+        if (response.status === 500) {
+          throw new Error(`Record with ID ${recordId} not found in table ${tableName}. read() error: ${response.error}`);
+        }
+      }
+
+      // Get all existing foreign key combinations
+      const lastRow = table.getLastRow() === 1? 2: table.getLastRow();
+      const existingRecords = []
+      entityFkIndices.forEach(colIndex =>
+          existingRecords.push(table.getRange(2, colIndex + 1, lastRow - 1).getValues())
+      );
+
+      // console.log("existing records:", existingRecords)
+      // console.log("existing records length:", existingRecords[0].length)
+      // console.log("fks length:", fksIds.length)
+      // console.log("existing records first element:", existingRecords[0][0][0])
+      let isDuplicate = false;
+
+      for (let i = 0; i < existingRecords[0].length && !isDuplicate; i++) {
+        let isMatch = true;
+        for (let j = 0; j < existingRecords.length && isMatch; j++) {
+          if (existingRecords[j][i][0] !== fksIds[j]) {
+            isMatch = false;
+          }
+        }
+        if (isMatch){
+          isDuplicate = true;
+        }
+      }
+
+      if (isDuplicate) {
+        throw new Error(`Duplicate relationship found for keys: ${fksIds.join(", ")}`);
+      }
+      // Prepare final data with timestamp
+      const enrichedData = {
+        created_at: new Date(),
+        ...data
+      };
+
+      return this.create(junctionTableName, enrichedData, keyOrder);
+    } catch (err) {
+      console.error("Error in createJunctionRecord:", err.stack);
+      return {
+        status: 500,
+        error: {
+          message: err.message,
+          stackTrace: err.stack
+        }
+      };
+    }
+  }
+
+  /**
+   * Gets records from a junction table along with related data
+   * @param {string} junctionTableName - Name of the junction table
+   * @param {string} sourceTableName - Name of the source table
+   * @param {string} targetTableName - Name of the target table
+   * @param {number} sourceId - ID from the source table
+   * @param {Object} options - Options for pagination and sorting
+   * @returns {Object} Status and array of related records with their relationships
+   */
+  getJunctionRecords(junctionTableName, sourceTableName, targetTableName, sourceId, options) {
+    try {
+      console.log('[JUNCTION] Starting junction record retrieval:', {
+        junctionTable: junctionTableName,
+        sourceTable: sourceTableName,
+        targetTable: targetTableName,
+        sourceId,
+        options
+      });
+      const foreignKeyField = `${sourceTableName.toLowerCase()}_id`;
+      const targetKeyField = `${targetTableName.toLowerCase()}_id`;
+      const fieldIndex = this._getFieldIndex(junctionTableName, foreignKeyField);
+
+      if (fieldIndex === -1) {
+        throw new Error(`Foreign key field '${foreignKeyField}' not found in junction table`);
+      }
+
+      const junctionResult = this.getRelatedRecords(
+          sourceId,
+          junctionTableName,
+          foreignKeyField,
+          fieldIndex,
+          options
+      );
+
+      if (junctionResult.status !== 200) {
+        return junctionResult;
+      }
+
+      if (junctionResult.data.length === 0) {
+        return {
+          status: 200,
+          data: [],
+          message: `No relations found for ${sourceTableName} ID ${sourceId}`
+        };
+      }
+
+
+      const targetsIds = []
+
+      for (let i = 0; i < junctionResult.data.length; i++) {
+        targetsIds.push(junctionResult.data[i][targetKeyField]);
+      }
+      console.log('[JUNCTION] Found target IDs:', targetsIds);
+
+      const targetRecords = this.readIdList(targetTableName, targetsIds);
+
+      if (targetRecords.status !== 200) {
+        return targetRecords;
+      }
+
+
+      const combinedData = [];
+
+      const targetMap = new Map(
+          targetRecords.data.map(record => [record.id, record])
+      )
+
+      for (let i = 0; i < junctionResult.data.length; i++) {
+        const targetRecord = targetMap.get(junctionResult.data[i][targetKeyField]);
+        if (targetRecord) {
+          combinedData.push({
+            ...targetRecord,
+            relationship: junctionResult.data[i]
+          })
+        }
+      }
+
+      return {
+        status: 200,
+        data: combinedData,
+        message: `Retrieved ${combinedData.length} related records from ${targetTableName}`,
+        metadata: {
+          totalJunctionRecords: junctionResult.data.length,
+          totalTargetRecords: targetRecords.data.length,
+          missingTargets: targetsIds.length - combinedData.length
+        }
+      };
+    } catch (err) {
+      console.error(`Error in getJunctionRecords: ${err.stack}`);
+      return {
+        status: 500,
+        error: {
+          message: err.message,
+          stackTrace: err.stack
+        }
+      };
+    }
+  }
+
+  createWithLogs(tableName, data, keyOrder, addUpdatePolicy = null) {
+    try {
+      console.log('\n[CREATE] Starting create operation:', {
+        tableName,
+        data,
+        keyOrder,
+        addUpdatePolicy
+      });
+
+      // Get sheet and validate existence
+      const sheet = this._getSheet(tableName);
+      console.log('[SHEET] Retrieved sheet:', sheet ? sheet.getName() : 'null');
+      if (!sheet) {
+        throw new Error(`Table "${tableName}" not found.`);
+      }
+
+      // Validate data
+      console.log('[VALIDATION] Starting data validation');
+      const validation = this._validateData(data, keyOrder, `for table "${tableName}"`);
+      console.log('[VALIDATION] Result:', validation);
+      if (!validation.isValid) {
+        throw new Error(`Missing required fields: ${validation.missingKeys.join(", ")} for table "${tableName}"`);
+      }
+
+      // Type checking
+      let typesChecked = false;
+      if (this.tables[tableName]) {
+        console.log('[TYPES] Starting type validation for fields:', this.tables[tableName]);
+        for (const [key, val] of Object.entries(data)) {
+          const expectedType = this.tables[tableName][key];
+          console.log('[TYPES] Checking field:', {
+            key,
+            value: val,
+            expectedType,
+            actualType: typeof val
+          });
+
+          if (expectedType && !this._checkType(val, expectedType)) {
+            throw new Error(`Type mismatch for field '${key}'. Expected ${expectedType}, got ${typeof val}`);
+          }
+        }
+        typesChecked = true;
+        console.log('[TYPES] All type checks passed');
+      } else {
+        console.log('[TYPES] No type definitions found for table, skipping type checks');
+      }
+
+      // Check for existing record
+      let existingRowIndex = -1;
+      let id;
+
+      if (addUpdatePolicy && addUpdatePolicy.key in data) {
+        console.log('[UPDATE POLICY] Checking for existing record with policy:', {
+          key: addUpdatePolicy.key,
+          value: addUpdatePolicy.value,
+          matchValue: data[addUpdatePolicy.key]
+        });
+
+        const columnIndex = keyOrder.indexOf(addUpdatePolicy.key) + 3; // +3 for id, date, and 1-based index
+        console.log('[UPDATE POLICY] Calculated column index:', columnIndex);
+
+        if (columnIndex > 2) {
+          const column = sheet.getRange(2, columnIndex, sheet.getLastRow() - 1);
+          console.log('[UPDATE POLICY] Searching in range:', {
+            startRow: 2,
+            column: columnIndex,
+            numRows: sheet.getLastRow() - 1
+          });
+
+          const searchResult = column
+              .createTextFinder(addUpdatePolicy.value.toString())
+              .matchEntireCell(true)
+              .findNext();
+
+          if (searchResult) {
+            existingRowIndex = searchResult.getRow();
+            id = sheet.getRange(existingRowIndex, 1).getValue();
+            console.log('[UPDATE POLICY] Found existing record:', {
+              row: existingRowIndex,
+              id: id
+            });
+          } else {
+            console.log('[UPDATE POLICY] No existing record found');
+          }
+        }
+      }
+
+      const now = new Date();
+      console.log('[TIMESTAMP] Using timestamp:', now);
+
+      if (existingRowIndex > -1) {
+        // Update existing Record
+        console.log('[UPDATE] Updating existing record:', {
+          tableName,
+          id,
+          existingRowIndex
+        });
+
+        const updateResult = this.update(
+            tableName,
+            id,
+            data,
+            keyOrder,
+            typesChecked
+        );
+        updateResult.action = "updated";
+        console.log('[UPDATE] Update complete:', updateResult);
+        return updateResult;
+      } else {
+        // Create new record
+        console.log('[CREATE] Creating new record');
+        const id = this._getNextId(sheet);
+        console.log('[CREATE] Generated new ID:', id);
+
+        const row = [
+          id,
+          now,
+          ...keyOrder.map((key) => {
+            const value = data[key];
+            console.log('[CREATE] Processing field:', {
+              key,
+              value,
+              type: typeof value,
+              isUndefined: value === undefined,
+              isBoolean: this.tables[tableName] && this.tables[tableName][key] === "boolean"
+            });
+
+            if (value === undefined) return "";
+            if (
+                this.tables[tableName] &&
+                this.tables[tableName][key] === "boolean"
+            )
+              return value.toString();
+            return value;
+          }),
+        ];
+
+        console.log('[CREATE] Final row data to append:', row);
+        sheet.appendRow(row);
+
+        const dataView = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues().slice(10);
+        console.log("[CREATE CHECK] Final sheet data ", dataView)
+
+        console.log('[CACHE] Clearing cache for table:', tableName);
+        this._clearCache(tableName);
+
+        const result = {
+          status: 200,
+          id: id,
+          action: "created",
+        };
+        console.log('[CREATE] Operation complete:', result);
+        return result;
+      }
+    } catch (err) {
+      console.error('[ERROR] Error in create operation:', {
+        error: err.message,
+        stack: err.stack,
+        tableName,
+        data
+      });
+      return {
+        status: 500,
+        error: err.message,
+      };
+    }
+  }
   /**
    * Update a record in the specified table
    * @param {string} tableName - Name of the sheet/table
@@ -245,91 +749,201 @@ class DB {
       addUpdatePolicy = null
   ) {
     try {
-      const sheet = this._getSheet(tableName);
-      if (!sheet) throw new Error(`Table ${tableName} not found`);
-
-      let rowIndex = this._findRowById(sheet, id);
-      if (rowIndex === -1) throw new Error(`Record with ID ${id} not found`);
-
-      // if (!this._validateData(data, keyOrder)) {
-      //   throw new Error("Invalid data format");
-      // }
-
-      const validation = this._validateData(
-          data,
-          keyOrder,
-          `in table "${tableName}"`
-      );
-      if (!validation.isValid) {
-        throw new Error(
-            `Missing required fields: ${validation.missingKeys.join(
-                ", "
-            )} in table "${tableName}"`
-        );
+      if (!this._acquireLock(tableName, id, 'write')){
+        throw new Error('Could not acquire write lock');
       }
+      try{
+        const sheet = this._getSheet(tableName);
+        if (!sheet) throw new Error(`Table ${tableName} not found`);
 
-      if (!typesChecked) {
-        if (this.tables[tableName]) {
-          for (const [key, val] of Object.entries(data)) {
-            const expectedType = this.tables[tableName][key];
-            if (expectedType && !this._checkType(val, expectedType)) {
-              throw new Error(
-                  `Type mismatch for field '${key}'. Expected ${expectedType}, got ${typeof val}, value: ${val}`
-              );
+        let rowIndex = this._findRowById(sheet, id);
+        if (rowIndex === -1) throw new Error(`Record with ID ${id} not found`);
+
+        // if (!this._validateData(data, keyOrder)) {
+        //   throw new Error("Invalid data format");
+        // }
+
+        const validation = this._validateData(
+            data,
+            keyOrder,
+            `in table "${tableName}"`
+        );
+        if (!validation.isValid) {
+          throw new Error(
+              `Missing required fields: ${validation.missingKeys.join(
+                  ", "
+              )} in table "${tableName}"`
+          );
+        }
+
+        if (!typesChecked) {
+          if (this.tables[tableName]) {
+            for (const [key, val] of Object.entries(data)) {
+              const expectedType = this.tables[tableName][key];
+              if (expectedType && !this._checkType(val, expectedType)) {
+                throw new Error(
+                    `Type mismatch for field '${key}'. Expected ${expectedType}, got ${typeof val}, value: ${val}`
+                );
+              }
             }
           }
         }
-      }
 
-      if (addUpdatePolicy && addUpdatePolicy.key in data) {
-        console.log(
-            "data has matched on the additional update policy:  " +
-            data[addUpdatePolicy.key]
-        );
-        const columnIndex = keyOrder.indexOf(addUpdatePolicy.key) + 3; // +3 for id, date, and 1-based index
-        if (columnIndex > 2) {
-          const column = sheet.getRange(2, columnIndex, sheet.getLastRow() - 1);
-          const searchResult = column
-              .createTextFinder(addUpdatePolicy.value.toString())
-              .matchEntireCell(true)
-              .findNext();
+        if (addUpdatePolicy && addUpdatePolicy.key in data) {
+          console.log(
+              "data has matched on the additional update policy:  " +
+              data[addUpdatePolicy.key]
+          );
+          const columnIndex = keyOrder.indexOf(addUpdatePolicy.key) + 3; // +3 for id, date, and 1-based index
+          if (columnIndex > 2) {
+            const column = sheet.getRange(2, columnIndex, sheet.getLastRow() - 1);
+            const searchResult = column
+                .createTextFinder(addUpdatePolicy.value.toString())
+                .matchEntireCell(true)
+                .findNext();
 
-          if (searchResult) {
-            rowIndex = searchResult.getRow();
-            id = sheet.getRange(rowIndex, 1).getValue();
+            if (searchResult) {
+              rowIndex = searchResult.getRow();
+              id = sheet.getRange(rowIndex, 1).getValue();
+            }
           }
         }
+
+        const now = new Date();
+        const updatedRow = [
+          id,
+          now,
+          ...keyOrder.map((key) => {
+            const value = data[key];
+            if (value === undefined) return "";
+            if (
+                this.tables[tableName] &&
+                this.tables[tableName][key] === "boolean"
+            )
+              return value.toString();
+            return value;
+          }),
+        ];
+        sheet.getRange(rowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
+
+        this._clearCache(tableName);
+        console.log(updatedRow)
+        return {
+          status: 200,
+          id: id,
+          data: {id:id, date: now,...data}, //could be a breaking change
+          action: "updated",
+        };
+      }finally{
+        this._releaseLock(tableName, id, 'write')
       }
-
-      const now = new Date();
-      const updatedRow = [
-        id,
-        now,
-        ...keyOrder.map((key) => {
-          const value = data[key];
-          if (value === undefined) return "";
-          if (
-              this.tables[tableName] &&
-              this.tables[tableName][key] === "boolean"
-          )
-            return value.toString();
-          return value;
-        }),
-      ];
-      sheet.getRange(rowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
-
-      this._clearCache(tableName);
-      return {
-        status: 200,
-        id: id,
-        data: data,
-        action: "updated",
-      };
     } catch (err) {
       console.error(`Error in update: ${err.message}`);
       return {
         status: 500,
         error: err.message,
+      };
+    }
+  }
+
+
+  updateWithLogs(tableName, id, data, keyOrder, typesChecked = false, addUpdatePolicy = null) {
+    try {
+      console.log("Update Method Input:", {
+        tableName,
+        id,
+        data,
+        keyOrder,
+        typesChecked,
+        addUpdatePolicy
+      });
+
+      const sheet = this._getSheet(tableName);
+      if (!sheet) throw new Error(`Table "${tableName}" not found`);
+
+      let rowIndex = this._findRowById(sheet, id);
+      console.log("Found row index:", rowIndex);
+      if (rowIndex === -1) throw new Error(`Record with ID ${id} not found`);
+
+      const validation = this._validateData(data, keyOrder, `in table "${tableName}"`);
+      console.log("Validation result:", validation);
+
+      if (!validation.isValid) {
+        throw new Error(`Missing required fields: ${validation.missingKeys.join(", ")} in table "${tableName}"`);
+      }
+
+      // Type checking
+      if (!typesChecked && this.tables[tableName]) {
+        console.log("Performing type checks for fields:", this.tables[tableName]);
+        for (const [key, val] of Object.entries(data)) {
+          const expectedType = this.tables[tableName][key];
+          console.log("Checking type for field:", {
+            key,
+            value: val,
+            expectedType,
+            actualType: typeof val
+          });
+
+          if (expectedType && !this._checkTypeWithLogs(val, expectedType)) {
+            throw new Error(`Type mismatch for field '${key}'. Expected ${expectedType}, got ${typeof val}, value: ${val}`);
+          }
+        }
+      }
+
+      // Build updated row data
+      const now = new Date();
+      const updatedRow = [id, now];
+
+      console.log("Building row data with keyOrder:", keyOrder);
+
+      keyOrder.forEach(key => {
+        const value = data[key];
+        console.log("Processing field:", {
+          key,
+          value,
+          type: typeof value,
+          fieldType: this.tables[tableName]?.[key]
+        });
+
+        if (value === undefined) {
+          updatedRow.push("");
+        } else if (this.tables[tableName]?.[key] === "boolean") {
+          updatedRow.push(Boolean(value).toString());
+        } else if (value === null) {
+          updatedRow.push("");
+        } else {
+          updatedRow.push(value);
+        }
+      });
+
+      console.log("Final row data to write:", updatedRow);
+
+      // Update the sheet
+      const range = sheet.getRange(rowIndex, 1, 1, updatedRow.length);
+      console.log("Updating range:", {
+        row: rowIndex,
+        columns: updatedRow.length,
+        values: updatedRow
+      });
+
+      range.setValues([updatedRow]);
+
+      this._clearCache(tableName);
+
+      return {
+        status: 200,
+        id: id,
+        data: data,
+        action: "updated"
+      };
+    } catch (err) {
+      console.error("Update error details:", {
+        error: err.message,
+        stack: err.stack
+      });
+      return {
+        status: 500,
+        error: err.message
       };
     }
   }
@@ -341,33 +955,139 @@ class DB {
    */
   read(tableName, id) {
     try {
-      const sheet = this._getSheet(tableName);
-      if (!sheet) throw new Error(`Table "${tableName}" not found`);
 
-      const rowIndex = this._findRowById(sheet, id);
-      if (rowIndex === -1) throw new Error(`Record with ID ${id} not found`);
+      if (!this._acquireLock(tableName, id, 'read')){
+        throw new Error('Could not acquire read lock');
+      }
 
-      const row = sheet
-          .getRange(rowIndex, 1, 1, sheet.getLastColumn())
-          .getValues()[0];
+      try{
+        const sheet = this._getSheet(tableName);
+        if (!sheet) throw new Error(`Table "${tableName}" not found`);
 
-      const headers = this._getHeaders(sheet);
+        const rowIndex = this._findRowById(sheet, id);
+        if (rowIndex === -1) throw new Error(`Record with ID ${id} not found`);
 
-      const record = headers.reduce((acc, header, index) => {
-        acc[header] = row[index];
-        return acc;
-      }, {});
+        const row = sheet
+            .getRange(rowIndex, 1, 1, sheet.getLastColumn())
+            .getValues()[0];
 
-      return {
-        status: 200,
-        data: record,
-      };
+        let headers_caps = this._getHeaders(sheet);
+
+        const headers = [];
+        headers_caps.forEach(s => headers.push(s.toLowerCase()));
+
+        const record = headers.reduce((acc, header, index) => {
+          acc[header] = row[index];
+          return acc;
+        }, {});
+
+        return {
+          status: 200,
+          data: record,
+        };
+      } finally {
+        this._releaseLock(tableName,id, 'read');
+      }
     } catch (err) {
       console.error(`Error in read: ${err.message}`);
       return {
         status: 500,
         error: err.message,
       };
+    }
+  }
+
+  /**
+   * Reads a list of records by their IDs
+   * @param {string} tableName - Name of the table to read from
+   * @param {number[]} ids - Array of record IDs to retrieve
+   * @returns {Object} Status and array of found records, with list of any IDs not found
+   */
+  readIdList(tableName, ids) {
+    try {
+      console.log('[READ LIST] Starting batch read operation:', {
+        tableName,
+        numberOfIds: ids.length,
+        ids
+      });
+
+      const MAX_IDS = 1000;
+      if (ids.length > MAX_IDS) {
+        return {
+          status: 400,
+          error: {
+            message: `Cannot request more than ${MAX_IDS} records at once, try getAll()`
+          }
+        };
+      }
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return {
+          status: 400,
+          error: {
+            message: "IDs must be a non-empty array"
+          }
+        };
+      }
+      if (!ids.every(id => typeof id === 'number')) {
+        return {
+          status: 400,
+          error: {
+            message: "All IDs must be numbers"
+          }
+        };
+      }
+
+      const table = this._getSheet(tableName);
+      if (!table) throw new Error(`Table "${tableName}" not found`);
+
+      const headers = this._getHeaders(table);
+      console.log('[READ LIST] Retrieved headers:', headers);
+
+      const idsSet = new Set(ids);
+      const idsFound = new Map(ids.map(id => [id, false]));
+      const data = table.getRange(2, 1, table.getLastRow() - 1, table.getLastColumn()).getValues();
+
+
+      const records = [];
+
+      for (let i = 0; i < data.length; i++) {
+        if (idsSet.has(data[i][0])) {
+          const record = headers.reduce((acc, header, index) => {
+            acc[header.toLowerCase()] = data[i][index];
+            return acc;
+          }, {});
+          records.push(record);
+          idsFound.set(data[i][0], true)
+        }
+      }
+
+      const notFoundIds = Array.from(idsFound.entries())
+          .filter(([_, found]) => !found)
+          .map(([id, _]) => id);
+
+      console.log('[READ LIST] Retrieved records:', {
+        found: records.length,
+        notFound: notFoundIds
+      });
+
+      return {
+        status: 200,
+        data: records,
+        notFound: notFoundIds,
+        message: notFoundIds.size > 0
+            ? `Retrieved ${records.length} records. IDs not found: ${notFoundIds.join(', ')}`
+            : `Retrieved ${records.length} records successfully`
+      };
+
+    } catch (err) {
+      console.error('[READ LIST] Error: ', err.stack)
+      return {
+        status: 500,
+        error: {
+          message: err.message,
+          stackTrace: err.stack
+        }
+      }
     }
   }
 
@@ -380,14 +1100,66 @@ class DB {
    */
   remove(tableName, historyTableName, id) {
     try {
+      if(!this._acquireLock(tableName,id,'write')){
+        throw new Error('Could not acquire write lock');
+      }
+      try{
+        const sheet = this._getSheet(tableName);
+        const historySheet = this._getSheet(historyTableName);
+        if (!sheet) throw new Error(`Table "${tableName}" not found`);
+        if (!historySheet)
+          throw new Error(`History Table "${tableName}" not found`);
+
+        const rowIndex = this._findRowById(sheet, id);
+        if (rowIndex === -1) throw new Error(`Record with ID ${id} not found`);
+
+        const deletedRow = sheet
+            .getRange(rowIndex, 1, 1, sheet.getLastColumn())
+            .getValues()[0];
+        sheet.deleteRow(rowIndex);
+
+        const historyId = this._getNextId(historySheet);
+        historySheet.appendRow([historyId, new Date(), ...deletedRow.slice(2)]);
+
+        this._clearCache(tableName);
+        this._clearCache(historyTableName);
+
+        return {
+          status: 200,
+          message: "Record removed succesfully",
+        };
+      } finally {
+        this._releaseLock(tableName, id, 'write');
+      }
+    } catch (err) {
+      console.error(`Error in remove: ${err.message}`);
+      return {
+        status: 500,
+        error: err.message,
+      };
+    }
+  }
+
+
+  /**
+   * Removes a record and its related junction records
+   * @param {string} tableName - Name of the table
+   * @param {string} historyTableName - Name of the history table
+   * @param {number} id - ID of the record to remove
+   * @returns {Object} Status of the cascade delete operation
+   */
+  removeWithCascade(tableName, historyTableName, id) {
+    try {
       const sheet = this._getSheet(tableName);
       const historySheet = this._getSheet(historyTableName);
       if (!sheet) throw new Error(`Table "${tableName}" not found`);
       if (!historySheet)
-        throw new Error(`History Table "${tableName}" not found`);
+        throw new Error(`History Table "${historyTableName}" not found`);
 
       const rowIndex = this._findRowById(sheet, id);
       if (rowIndex === -1) throw new Error(`Record with ID ${id} not found`);
+
+      this._handleCascadeDelete(tableName, id);// aca no se si esto debe ser un response o un try catch
 
       const deletedRow = sheet
           .getRange(rowIndex, 1, 1, sheet.getLastColumn())
@@ -405,10 +1177,271 @@ class DB {
         message: "Record removed succesfully",
       };
     } catch (err) {
-      console.error(`Error in remove: ${err.message}`);
+      console.error(`Error in remove: ${err.stack}`);
       return {
         status: 500,
+        error: {
+          message: err.message,
+          stackTrace: err.stack
+        }
+      };
+    }
+  }
+
+  /**
+   * Validates the integrity of a junction table
+   * @param {string} junctionTableName - Name of the junction table to check
+   * @param {string} junctionHistoryTableName - Name of the history table
+   * @returns {Object} Status and count of invalid records removed
+   */
+  checkTableIntegrity(junctionTableName, junctionHistoryTableName) {
+    try {
+      const table = this._getSheet(junctionTableName);
+      const historyTable = this._getSheet(junctionHistoryTableName);
+
+      if (!table || !historyTable) {
+        console.error('[SHEETS] Sheet reference check failed:', {
+          mainTableExists: !!table,
+          historyTableExists: !!historyTable
+        });
+        throw new Error(
+            !table
+                ? `Table '${tableName}' not found when trying to delete related junction records`
+                : `Table '${junctionHistoryTableName}' not found when trying to delete related junction records`
+        );
+      }
+
+      const headers = this._getHeaders(table);
+      const fkColumns = headers.filter(h => h.toLowerCase().endsWith('_id'));
+
+      if (fkColumns.length !== 2) {
+        throw new Error('Invalid junction table structure');
+      }
+
+      const data = table.getRange(2, 1, table.getLastRow() - 1, table.getLastColumn()).getValues();
+      const invalidRows = [];
+      const rowsToRemove = [];
+
+      const historyId = this._getNextId(historyTable);
+
+      for (let i = 0; i < data.length; i++) {
+        let isValid = true;
+        for (let j = 0; j < fkColumns.length; j++) {
+          const colIndex = headers.indexOf(fkColumns[j]);
+          const fkValue = data[i][colIndex];
+          const parentTable = fkColumns[j].replace(/_id$/i, '').toUpperCase();
+
+          const response = this.read(parentTable, fkValue);
+          if (response.status !== 200) {
+            isValid = false;
+          }
+        }
+        if (!isValid) {
+          invalidRows.unshift(i + 2);
+          rowsToRemove.push([
+            historyId + invalidRows.length,
+            new Date(),
+            ...data[i].slice(2)
+          ])
+        }
+      }
+
+      if (invalidRows.length > 0) {
+        console.log('[DELETE] Starting row deletion process');
+        invalidRows.forEach((rowIdx, index) => {
+          console.log(`[DELETE] Removing row ${rowIdx} (${index + 1}/${invalidRows.length})`);
+          table.deleteRow(rowIdx);
+        });
+        console.log('[DELETE] Row deletion completed');
+
+        // Add to history
+        console.log('[HISTORY] Adding records to history table');
+        const historyRange = historyTable.getRange(
+            (historyTable.getLastRow() == 1 ? 2 : historyTable.getLastRow()),
+            1,
+            rowsToRemove.length,
+            rowsToRemove[0].length
+        );
+        historyRange.setValues(rowsToRemove);
+        console.log('[HISTORY] History records added successfully');
+
+        // Clear cache
+        console.log('[CACHE] Clearing cache for affected tables');
+        this._clearCache(junctionTableName);
+        this._clearCache(junctionHistoryTableName);
+        console.log('[CACHE] Cache cleared successfully');
+      } else {
+        console.log('[NO_ACTION] No matching records found to delete');
+      }
+
+      const result = {
+        status: 200,
+        count: rowsToRemove.length,
+        message: "Record(s) removed successfully"
+      };
+      console.log('[COMPLETE] Operation finished successfully:', result);
+      return result;
+    } catch (err) {
+      console.error(`Error in checkTableIntegrity: ${err.stack}`);
+      return {
+        status: 500,
+        error: {
+          message: err.message,
+          stackTrace: err.stack
+        }
+      };
+    }
+  }
+
+  /**
+   * Deletes related records from a junction table
+   * @param {string} tableName - Name of the junction table
+   * @param {string} junctionHistoryTableName - Name of the history table
+   * @param {number} fkIndex - Index of the foreign key column
+   * @param {number} id - ID to match in the foreign key column
+   * @returns {Object} Status and count of deleted records
+   */
+  deleteRelatedJunctionRecords(tableName, junctionHistoryTableName, fkIndex, id) {
+    console.log('\n[DELETE_JUNCTION] Starting deletion process:', {
+      tableName,
+      historyTable: junctionHistoryTableName,
+      fkIndex,
+      targetId: id
+    });
+
+    try {
+      if (!this._acquireLock(tableName, id, 'write')){
+        throw new Error("Could not acquire write lock");
+      }
+      try{
+        // Get and validate table references
+        console.log('[SHEETS] Attempting to get sheet references');
+        const table = this._getSheet(tableName);
+        const historyTable = this._getSheet(junctionHistoryTableName);
+
+        if (!table || !historyTable) {
+          console.error('[SHEETS] Sheet reference check failed:', {
+            mainTableExists: !!table,
+            historyTableExists: !!historyTable
+          });
+          throw new Error(
+              !table
+                  ? `Table '${tableName}' not found when trying to delete related junction records`
+                  : `Table '${junctionHistoryTableName}' not found when trying to delete related junction records`
+          );
+        }
+        console.log('[SHEETS] Successfully retrieved both sheets');
+
+        // Check for existing data
+        const lastRow = table.getLastRow();
+        console.log('[ROWS] Last row in table:', lastRow);
+
+        if (lastRow < 1) {
+          console.log('[EMPTY] Table is empty, no records to delete');
+          return {
+            status: 204,
+            message: "No content to delete"
+          };
+        }
+
+        // Get data range for processing
+        console.log('[DATA] Retrieving data range:', {
+          startRow: 2,
+          targetColumn: fkIndex + 1,
+          numRows: lastRow - 1,
+          numCols: table.getLastColumn()
+        });
+
+        const idCol = table.getRange(2, fkIndex + 1, lastRow - 1).getValues();
+        const fullData = table.getRange(2, 1, lastRow - 1, table.getLastColumn()).getValues();
+        console.log('[DATA] Retrieved rows:', idCol.length);
+
+        // Prepare for deletion
+        const historyId = this._getNextId(historyTable);
+        console.log('[HISTORY] Generated new history ID:', historyId);
+
+        // Find records to remove
+        console.log('[PROCESS] Starting record identification');
+        let idxToRemove = [];
+        let rowsToRemove = [];
+
+        for (let i = 0; i < idCol.length; i++) {
+          if (idCol[i][0] === id) {
+            idxToRemove.unshift(i + 2);
+            rowsToRemove.push([
+              historyId + idxToRemove.length,
+              new Date(),
+              ...fullData[i].slice(2)
+            ]);
+            console.log(`[MATCH] Found matching record at row ${i + 2}, ${fullData[i]}`);
+          }
+        }
+
+        console.log('[SUMMARY] Records found:', {
+          totalMatches: rowsToRemove.length,
+          idxToDelete: idxToRemove,
+          rowsToDelete: rowsToRemove,
+          historyRecordsToCreate: rowsToRemove.length
+        });
+
+        // Perform deletions
+        if (idxToRemove.length > 0) {
+          console.log('[DELETE] Starting row deletion process');
+          idxToRemove.forEach((rowIdx, index) => {
+            console.log(`[DELETE] Removing row ${rowIdx} (${index + 1}/${idxToRemove.length})`);
+            table.deleteRow(rowIdx);
+          });
+          console.log('[DELETE] Row deletion completed');
+
+          // Add to history
+          console.log('[HISTORY] Adding records to history table');
+          const historyRange = historyTable.getRange(
+              (historyTable.getLastRow() == 1 ? 2 : historyTable.getLastRow()),
+              1,
+              rowsToRemove.length,
+              rowsToRemove[0].length
+          );
+          historyRange.setValues(rowsToRemove);
+          console.log('[HISTORY] History records added successfully');
+
+          // Clear cache
+          console.log('[CACHE] Clearing cache for affected tables');
+          this._clearCache(tableName);
+          this._clearCache(junctionHistoryTableName);
+          console.log('[CACHE] Cache cleared successfully');
+        } else {
+          console.log('[NO_ACTION] No matching records found to delete');
+        }
+
+        const result = {
+          status: 200,
+          count: rowsToRemove.length,
+          message: "Record(s) removed successfully"
+        };
+        console.log('[COMPLETE] Operation finished successfully:', result);
+        return result;
+      } finally {
+        this._releaseLock(tableName, id , 'write');
+      }
+
+    } catch (err) {
+      console.error('[ERROR] Failed to remove related junction records:', {
         error: err.message,
+        stack: err.stack,
+        context: {
+          tableName,
+          historyTable: junctionHistoryTableName,
+          fkIndex,
+          targetId: id
+        }
+      });
+
+      return {
+        status: 500,
+        error: {
+          message: err.message,
+          stackTrace: err.stack
+        }
       };
     }
   }
@@ -545,7 +1578,7 @@ class DB {
         console.log(`Table found: ${sheet.getName()}`);
       }
 
-      if (!this.tables[tableName][field]){
+      if (!this.tables[tableName][field]) {
         throw new Error(`Query field (${field}) does NOT exists in the table.`);
       }
 
@@ -656,6 +1689,200 @@ class DB {
     }
   }
 
+  getRelatedRecordsWithLogs(foreignKey, tableName, field, fieldIndex, options = {}, useCache = false) {
+    try {
+      console.log(`[START] getRelatedRecords with params:`, {
+        foreignKey,
+        tableName,
+        field,
+        fieldIndex,
+        options,
+        useCache
+      });
+
+      let message = "Related Data retrieved successfully";
+      const sheet = this._getSheet(tableName);
+
+      console.log(`[SHEET] Retrieved sheet:`, sheet ? sheet.getName() : 'null');
+
+      // Type checking for foreign key
+      if (!(typeof foreignKey === "number")) {
+        console.error(`[ERROR] Invalid foreign key type:`, typeof foreignKey);
+        throw new Error(`Foreign key (${foreignKey}) is not a number!`);
+      }
+
+      // Sheet existence check
+      if (!sheet) {
+        console.error(`[ERROR] Sheet not found:`, tableName);
+        throw new Error(`Table "${tableName}" not found`);
+      }
+
+      // Field existence check
+      if (!this.tables[tableName][field]) {
+        console.error(`[ERROR] Field not found:`, {
+          table: tableName,
+          field: field,
+          availableFields: Object.keys(this.tables[tableName])
+        });
+        throw new Error(`Query field (${field}) does NOT exists in the table.`);
+      }
+
+      const cacheKey = `${tableName}_FK_${foreignKey}_all`;
+      let relatedData;
+
+      // Cache check
+      if (useCache) {
+        console.log(`[CACHE] Attempting to retrieve from cache with key:`, cacheKey);
+        relatedData = this._getCachedData(cacheKey);
+        if (relatedData) {
+          console.log(`[CACHE] Data found in cache, length:`, relatedData.length);
+        } else {
+          console.log(`[CACHE] No cached data found`);
+        }
+      }
+
+      if (!relatedData) {
+        console.log(`[PROCESS] Starting data retrieval from sheet`);
+        const headers = this._getHeaders(sheet);
+        console.log(`[HEADERS] Retrieved headers:`, headers);
+
+        const lastRow = sheet.getLastRow();
+        console.log(`[ROWS] Last row:`, lastRow);
+
+        if (sheet.getLastRow() === 1) {
+          console.log(`[EMPTY] Table is empty (only headers)`);
+          return {
+            status: 200,
+            data: [],
+            message: `No Data in the Table "${tableName}"`
+          };
+        }
+
+        console.log(`[DATA] Retrieving data range from sheet`);
+        relatedData = sheet
+            .getRange(2, 1, sheet.getLastRow(), sheet.getLastColumn())
+            .getValues();
+        console.log(`[DATA] Retrieved ${relatedData.length} rows of raw data`);
+
+        let finalData = [];
+        console.log(`[FILTER] Starting to filter data with fieldIndex:`, fieldIndex);
+        console.log(`[FILTER] Looking for foreignKey:`, foreignKey);
+
+        for (let i = 0; i < relatedData.length; i++) {
+          let row = relatedData[i];
+          if (i === 0 || i === relatedData.length - 1) {
+            console.log(`[ROW ${i}] Sample row data:`, row);
+            console.log(`[ROW ${i}] Value at fieldIndex:`, row[fieldIndex]);
+          }
+
+          if (row[fieldIndex] === foreignKey) {
+            let obj = {};
+            for (let j = 0; j < headers.length; j++) {
+              let header = headers[j].toLowerCase();
+              obj[header] = row[j];
+            }
+            finalData.push(obj);
+          }
+        }
+
+        console.log(`[FILTER] Found ${finalData.length} matching records`);
+        relatedData = finalData;
+
+        if (relatedData.length <= 1000) {
+          console.log(`[CACHE] Caching ${relatedData.length} records`);
+          this._setCachedData(cacheKey, relatedData);
+        } else {
+          console.log(`[CACHE] Data too large to cache:`, relatedData.length);
+        }
+      }
+
+      // Sorting
+      if (options.sortBy) {
+        console.log(`[SORT] Attempting to sort by:`, options.sortBy);
+        const sortField = options.sortBy;
+        const sortOrder = options.sortOrder === "desc" ? -1 : 1;
+        const fieldType = this.tables[tableName][sortField];
+        console.log(`[SORT] Field type:`, fieldType);
+
+        if (fieldType) {
+          relatedData.sort((a, b) => {
+            let compareOperator;
+            switch (fieldType) {
+              case "number":
+                compareOperator = a[sortField] - b[sortField];
+                break;
+              case "string":
+                compareOperator = a[sortField].localeCompare(b[sortField]);
+                break;
+              case "boolean":
+                if (a[sortField] && !b[sortField]) {
+                  compareOperator = -1;
+                } else if (!a[sortField] && b[sortField]) {
+                  compareOperator = 1;
+                } else {
+                  compareOperator = 0;
+                }
+                break;
+              case "date":
+                compareOperator = a[sortField].getTime() - b[sortField].getTime();
+                break;
+              default:
+                throw new Error(`Unsupported sort field type: ${fieldType}`);
+            }
+            return compareOperator * sortOrder;
+          });
+          message = `Related Data Sorted Successfully by '${sortField}'`;
+        } else {
+          console.warn(`[SORT] Field not found in schema:`, sortField);
+          message = `Warning: Sorting not applied. Field '${sortField}' not found in table schema.`;
+        }
+      }
+
+      // Pagination
+      if (options.page && options.pageSize) {
+        console.log(`[PAGE] Applying pagination:`, options);
+        const page = parseInt(options.page);
+        const pageSize = parseInt(options.pageSize);
+
+        if (isNaN(page) || isNaN(pageSize) || page < 1 || pageSize < 1) {
+          console.error(`[PAGE] Invalid pagination parameters:`, { page, pageSize });
+          throw new Error("Invalid pagination parameters");
+        }
+
+        const startIndex = (page - 1) * pageSize;
+        relatedData = relatedData.slice(startIndex, startIndex + pageSize);
+        message += `(Page ${page}, ${pageSize} items per page)`;
+        console.log(`[PAGE] Applied pagination, results:`, relatedData.length);
+      }
+
+      console.log(`[END] Returning ${relatedData.length} records`);
+      return {
+        status: 200,
+        data: relatedData,
+        message: message
+      };
+
+    } catch (err) {
+      console.error(`[ERROR] Error in getRelatedRecords:`, err);
+      console.error(`[ERROR] Stack trace:`, err.stack);
+      return {
+        status: 500,
+        error: err.message
+      };
+    }
+  }
+
+
+  /**
+   * Gets related records when provided a fk.
+   * @param {number} foreignKey - Foreign key to search for
+   * @param {string} tableName - Name of the table to search in
+   * @param {string} field - Field name containing the foreign key
+   * @param {number} fieldIndex - Index of the field in the table
+   * @param {Object} [options={}] - Options for pagination and sorting
+   * @param {boolean} [useCache=false] - Whether to use cached data
+   * @returns {Object} Status and array of related records with detailed logs
+   */
   getRelatedRecords(
       foreignKey,
       tableName,
@@ -677,7 +1904,7 @@ class DB {
         console.log(`Table found: ${sheet.getName()}`);
       }
 
-      if (!this.tables[tableName][field]){
+      if (!this.tables[tableName][field]) {
         throw new Error(`Query field (${field}) does NOT exists in the table.`);
       }
 
@@ -705,12 +1932,12 @@ class DB {
             .getRange(2, 1, sheet.getLastRow(), sheet.getLastColumn())
             .getValues()
         let finalData = [];
-        for (let i=0;i<relatedData.length; i++){
+        for (let i = 0; i < relatedData.length; i++) {
           let row = relatedData[i];
           let obj = {}
-          if (row[fieldIndex] === foreignKey){
+          if (row[fieldIndex] === foreignKey) {
             // console.log("row que si paso", row)
-            for (let j=0; j<headers.length; j++){
+            for (let j = 0; j < headers.length; j++) {
               let header = headers[j].toLowerCase();
               obj[header] = row[j];
             }
@@ -791,6 +2018,16 @@ class DB {
     }
   }
 
+  /**
+   * Gets related records using text finder
+   * @param {number} foreignKey - Foreign key to search for
+   * @param {string} tableName - Name of the table to search in
+   * @param {string} field - Field name containing the foreign key
+   * @param {number} fieldIndex - Index of the field in the table
+   * @param {Object} [options={}] - Options for pagination and sorting
+   * @param {boolean} [useCache=false] - Whether to use cached data
+   * @returns {Object} Status and array of related records found using text finder
+   */
   getRelatedRecordsWithTextFinder(
       foreignKey,
       tableName,
@@ -940,6 +2177,107 @@ class DB {
     }
   }
 
+  /**
+   * MANY TO MANY LOGIC (create stays the same)
+   */
+
+  updateJunctionRecord(junctionTableName, id, data, keyOrder){
+    try{
+      const table = this._getSheet(junctionTableName);
+      if (!table){
+        throw new Error(`Junction table '${junctionTableName}' not found.`)
+      }
+      const headers = this._getHeaders(table);
+      if (!headers || !headers.length) {
+        throw new Error(`Could not retrieve headers for table '${junctionTableName}'`);
+      }
+
+      // Validate we have exactly two foreign keys
+      const checkDimension = Object.keys(data).length === 2;
+      if (!checkDimension) {
+        throw new Error('Junction table must have exactly two foreign key fields');
+      }
+
+      // Get foreign key field names and their indices
+      let entityTableNames = keyOrder.filter(item => item.endsWith("_id"));
+
+      console.log("entity table names no cleaning:", entityTableNames);
+
+      const entityFkIndices = entityTableNames.map(fieldName => headers.indexOf(fieldName.toUpperCase()));
+      console.log("fk column indices:", entityFkIndices);
+
+      // Validate all foreign key columns were found
+      if (entityFkIndices.includes(-1)) {
+        throw new Error('One or more foreign key columns not found in headers');
+      }
+
+      // Clean table names by removing _id suffix
+      entityTableNames = entityTableNames.map(item => item.replace(/_id$/, ""));
+      console.log("entity table names:", entityTableNames);
+
+      // Collect and validate foreign keys
+      const fksIds = [];
+      for (const tableName of entityTableNames) {
+        const id_field = `${tableName}_id`;
+        const recordId = data[id_field];
+        fksIds.push(recordId);
+
+        const response = this.read(tableName.toUpperCase(), recordId);
+        if (response.status === 500) {
+          throw new Error(`Record with ID ${recordId} not found in table ${tableName}. read() error: ${response.error}`);
+        }
+      }
+
+      // Get all existing foreign key combinations
+      const lastRow = table.getLastRow() === 1? 2: table.getLastRow();
+
+      const existingRecords = []
+      entityFkIndices.forEach(colIndex =>
+          existingRecords.push(table.getRange(2, colIndex + 1, lastRow - 1).getValues())
+      );
+
+      // console.log("existing records:", existingRecords)
+      // console.log("existing records length:", existingRecords[0].length)
+      // console.log("fks length:", fksIds.length)
+      // console.log("existing records first element:", existingRecords[0][0][0])
+      let isDuplicate = false;
+
+      for (let i = 0; i < existingRecords[0].length && !isDuplicate; i++) {
+        let isMatch = true;
+        for (let j = 0; j < existingRecords.length && isMatch; j++) {
+          if (existingRecords[j][i][0] !== fksIds[j]) {
+            isMatch = false;
+          }
+        }
+        if (isMatch){
+          isDuplicate = true;
+        }
+      }
+
+      if (isDuplicate) {
+        throw new Error(`Duplicate relationship found for keys: ${fksIds.join(", ")}`);
+      }
+      // Prepare final data with timestamp
+      const enrichedData = {
+        created_at: new Date(),
+        ...data
+      };
+
+      return this.update(junctionTableName, id, enrichedData, keyOrder)
+    }catch(err){
+      console.error("Error updating junction record", err.stack);
+      return {
+        status: 500,
+        error: {
+          message: err.message,
+          stackTrace: err.stack
+        }
+      }
+    }
+  }
+
+
+
   _getHeaders(sheet) {
     return sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   }
@@ -966,12 +2304,66 @@ class DB {
   }
 
   _setCachedData(key, data) {
-    this.cache.put(key, JSON.stringify(data), 600);
+    console.log("[CACHE] trying to cache", data.length, " records in", key, "key")
+    try {
+      this.cache.put(key, JSON.stringify(data), 600);
+    } catch (e) {
+      console.log("[CACHE] tried to cache", data.length, " records in", key, "key, but got the error: ", e.message)
+      console.log("[WARNING] NO CACHE SET FOR ", key, " key")
+    }
   }
 
   _clearCache(tableName) {
     this.cache.remove(`${tableName}_all`);
   }
+
+  /**
+   * Handles cascade deletion of related records
+   * @private
+   * @param {string} tableName - Name of the parent table
+   * @param {number} id - ID of the record being deleted
+   * @returns {Object} Status and count of deleted related records
+   */
+  _handleCascadeDelete(tableName, id) {
+    try {
+      const sheets = this.spreadsheet.getSheets();
+      const tableBaseName = tableName.toLowerCase();
+
+
+      let deletedRelations = 0; // Track number of affected records
+      for (const sheet of sheets) {
+        const sheetName = sheet.getName();
+        if (!sheetName.includes("DELETED") && sheetName.includes('RELATION')) {
+          const junctionTableName = sheetName;
+          const junctionHistoryTableName = `DELETED_${sheetName}`
+          const headers = this._getHeaders(sheet);
+          const fkFieldName = `${tableBaseName}_id`;
+
+          const fkIndex = headers.indexOf(fkFieldName.toUpperCase());
+
+          if (fkIndex !== -1) {
+            const response = this.deleteRelatedJunctionRecords(
+                junctionTableName,
+                junctionHistoryTableName,
+                fkIndex,
+                id);
+            if (response.status === 200) {
+              deletedRelations += response.count;
+            }
+          }
+        }
+      }
+      return {
+        status: 200,
+        message: `Cascade delete completed. Removed ${deletedRelations} related records`
+      }
+    } catch (err) {
+      console.error("Cascade delete failed:", err);
+      throw err; // Propagate error to main delete operation
+    }
+  }
+
+
 
   /**
    * Find the row index of a record by its ID
@@ -1032,6 +2424,124 @@ class DB {
         return false;
     }
   }
+
+  /**
+   * Validates type checking with detailed logging
+   * @private
+   * @param {*} value - Value to check
+   * @param {string} expectedType - Expected type of the value
+   * @returns {boolean} Whether the value matches the expected type
+   */
+  _checkTypeWithLogs(value, expectedType) {
+    console.log("\n[TYPE CHECK] Starting type check:", {
+      value,
+      expectedType,
+      actualType: typeof value,
+      isNull: value === null,
+      isUndefined: value === undefined
+    });
+
+    switch (expectedType) {
+      case "number":
+        const isNumber = typeof value === "number" && !isNaN(value);
+        console.log("[NUMBER CHECK]", {
+          value,
+          isTypeNumber: typeof value === "number",
+          isNotNaN: !isNaN(value),
+          finalResult: isNumber
+        });
+        return isNumber;
+
+      case "string":
+        const isString = typeof value === "string";
+        console.log("[STRING CHECK]", {
+          value,
+          isTypeString: isString,
+          valueLength: value?.length
+        });
+        return isString;
+
+      case "boolean":
+        const isBoolean = typeof value === "boolean";
+        console.log("[BOOLEAN CHECK]", {
+          value,
+          isTypeBoolean: isBoolean,
+          isTruthy: !!value
+        });
+        return isBoolean;
+
+      case "date":
+        try {
+          console.log("[DATE CHECK] Initial value:", {
+            value,
+            isDate: value instanceof Date,
+            prototype: Object.prototype.toString.call(value)
+          });
+
+          // Check if it's a Date object
+          const isDateObject = Object.prototype.toString.call(value) === "[object Date]";
+          console.log("[DATE CHECK] Is Date object:", isDateObject);
+
+          // Try to get timestamp (will throw if not a valid date)
+          let hasValidTimestamp = false;
+          try {
+            hasValidTimestamp = !isNaN(value.getTime());
+            console.log("[DATE CHECK] Timestamp check:", {
+              timestamp: value.getTime(),
+              isValid: hasValidTimestamp
+            });
+          } catch (e) {
+            console.error("[DATE CHECK] Failed to get timestamp:", e.message);
+          }
+
+          const isValidDate = isDateObject && hasValidTimestamp;
+          console.log("[DATE CHECK] Final result:", {
+            isDateObject,
+            hasValidTimestamp,
+            isValid: isValidDate
+          });
+
+          return isValidDate;
+        } catch (err) {
+          console.error("[DATE CHECK] Error during date validation:", {
+            error: err.message,
+            stack: err.stack
+          });
+          return false;
+        }
+
+      default:
+        console.warn("[TYPE CHECK] Unknown type:", expectedType);
+        return false;
+    }
+  }
+
+  _checkValidCreationTypes(tableFields) {
+    const VALID_TYPES = ['string', 'number', 'boolean', 'date'];
+    const validTypes = VALID_TYPES.join(', ');
+    if (tableFields) {
+      for (const [field, type] of Object.entries(tableFields)) {
+        if (!VALID_TYPES.includes(type)) {
+          throw new Error(`Invalid type "${type}" for field "${field}". Valid types are: ${validTypes}`)
+        }
+      }
+    }
+  }
+
+  _getFieldIndex(tableName, fieldName) {
+    const table = this._getSheet(tableName);
+    if (!table) {
+      throw new Error(`Table '${tableName}' not found`);
+    }
+
+    const headers = this._getHeaders(table);
+    const fieldIndex = headers.findIndex(
+        header => header.toLowerCase() === fieldName.toLowerCase()
+    );
+
+    return fieldIndex;
+  }
+
   applyColorScheme(tableName, colorScheme) {
     const sheet = this.spreadsheet.getSheetByName(tableName);
     const lastRow = sheet.getLastRow();
@@ -1283,4 +2793,11 @@ function example() {
   //       }
   //     }
   // })
+
+  console.log(db.createManyToManyTableConfig({
+    tableName: "TOOL_GROUP_RELATION",
+    historyTableName: "DELETED_TOOL_GROUP_RELATION",
+    entity1TableName: "TOOL",
+    entity2TableName: "MINOR_TOOL_GROUP_MIGRATION",
+  }))
 }
