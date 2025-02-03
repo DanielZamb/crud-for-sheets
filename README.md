@@ -1,4 +1,5 @@
-# 📊 Google Apps Script CRUD Class for Google Sheets
+
+# 📊 Google Apps Script CRUD Class for Google Sheets (v1.0.0)
 
 Welcome to the **Google Apps Script CRUD Class for Google Sheets**! This library simplifies managing your Google Sheets as databases, allowing you to perform **Create, Read, Update,** and **Delete** (CRUD) operations with ease. Whether you're building a CRM, inventory system, or any data-driven application, this library has got you covered! 🚀
 
@@ -10,12 +11,47 @@ Welcome to the **Google Apps Script CRUD Class for Google Sheets**! This library
 - **📜 History Tracking**: Automatically track deletions with history tables.
 - **🔍 Sorting & Pagination**: Easily sort and paginate your data for better management.
 - **✅ Type Validation**: Ensure data integrity with type checking (`number`, `string`, `boolean`, `date`).
-- **🎨 Customizable Color Schemes**: Beautify your sheets with predefined color themes.
+- **📦 **New** Concurrency Locks**: Prevent race conditions with built-in locking mechanisms for writes and reads.
+- **🔗 **New** Many-to-Many Relationship Support**: Handle complex data relationships using junction tables.
 - **⚡️ Caching**: Improve performance with built-in caching mechanisms.
+- **🎨 Customizable Color Schemes**: Beautify your sheets with predefined color themes.
+- **🗃 **New** Bulk Reading**: Fetch multiple records by ID in a single call.
+
+## 🎉 What's New in v1.0.0
+
+1. **Concurrency Locks**
+  - **Locking for Create/Update/Delete** operations to prevent concurrent writes on the same record.
+  - New methods:
+    - `releaseLocks()`: Frees all active locks held by this instance.
+  - Automatically applied in `create`, `update`, and `remove`.
+
+2. **Many-to-Many Relationship Support**
+  - Easily create and manage **junction tables**.
+  - New methods:
+    - `createManyToManyTableConfig(config)`: Generates a ready-to-use table config for a junction (relation) table.
+    - `createJunctionRecord(junctionTableName, data, keyOrder)`: Creates a new entry in the junction table.
+    - `getJunctionRecords(junctionTableName, sourceTableName, targetTableName, sourceId, options)`: Returns related records from a junction.
+    - `updateJunctionRecord(junctionTableName, id, data, keyOrder)`: Updates an existing record in the junction table.
+
+3. **Cascade Deletion**
+  - `removeWithCascade(tableName, historyTableName, id)`: Removes a parent record and automatically deletes or archives the related records from associated junction tables.
+
+4. **Bulk Read**
+  - `readIdList(tableName, ids)`: Allows you to read multiple records by their IDs in a single call.
+
+5. **Integrity Checks**
+  - `checkTableIntegrity(junctionTableName, junctionHistoryTableName)`: Scans a junction table for invalid foreign key references and moves them to history if the parent records no longer exist.
+
+6. **Enhanced Logging & Debug**
+  - Variants such as `createWithLogs()` and `updateWithLogs()` provide verbose logging to aid in debugging.
+
+---
 
 ## 📦 Installation
 
-**Copy the class found in CrudForSheets.js** *( i have yet to find out how to share a library publicly, when i do follow the steps bellow)*
+**Copy the class found in CrudForSheets.js** 
+
+*( i have yet to find out how to share a library publicly, when i do follow the steps bellow)*
 
 ------------------------------------------------------------------------------------------------------------------------------------------
 1. **Open Google Apps Script Editor**:
@@ -447,6 +483,17 @@ function deleteEmployee(id) {
 }
 ```
 
+### **New**: Cascade Deletion
+
+If you have many-to-many relationships, you might want to -in order to keep consistency- use:
+```javascript
+function deleteEmployeeCascade(id) {
+  // removes the employee and the related records from the junction tables
+  const deleteResult = db.removeWithCascade('EMPLOYEES', 'DELETED_EMPLOYEES', id);
+  return JSON.stringify(deleteResult);
+}
+```
+
 2. Call it when needed
 ```javascript
 google.script.run
@@ -534,6 +581,57 @@ function addEmployeeWithValidation() {
 }
 ```
 
+### 🔗 Many-to-Many Relationships
+
+Create junction tables for many-to-many relationships, e.g., `PROJECTS` <-> `EMPLOYEES`:
+
+```javascript
+// 1. Create the relation config
+const relationConfig = db.createManyToManyTableConfig({
+  entity1TableName: "PROJECTS",
+  entity2TableName: "EMPLOYEES",
+  fieldsRelatedToBothEntities: {
+    extra_field: "string" // optional
+  }
+});
+
+/*
+ relationConfig.data is an object just like: 
+ {
+   tableName: "PROJECTS_EMPLOYEES_RELATION",
+   historyTableName: "DELETED_PROJECTS_EMPLOYEES_RELATION",
+   fields: { created_at: "date", projects_id: "number", employees_id: "number", ...}
+ }
+*/
+
+// 2. Create that table 
+db.createTable(relationConfig.data);
+db.putTableIntoDbContext(relationConfig.data);
+
+// 3. Insert a record in the junction table
+db.createJunctionRecord("PROJECTS_EMPLOYEES_RELATION", {
+  projects_id: 10,
+  employees_id: 5
+}, ["projects_id", "employees_id"]); 
+```
+
+### 🔎 Bulk Reading by IDs
+
+Read multiple records in one go:
+
+```javascript
+function readManyEmployees() {
+  // pass an array of IDs
+  const result = db.readIdList("EMPLOYEES", [1,2,3,100]);
+  console.log(result.data);       // found records
+  console.log(result.notFound);   // array of IDs not found
+  return JSON.stringify(result);
+}
+```
+
+---
+
+
 ## 🔍 Detailed Function Documentation
 
 ### `init(dbName, dbId)`
@@ -590,6 +688,15 @@ function addEmployeeWithValidation() {
   - `id` *(number|string)*: ID of the record.
 - **Returns**: Status object with `status` and `message` or `error`.
 
+### **New**: `removeWithCascade(tableName, historyTableName, id)`
+Removes a parent record **and** its related records in any junction tables.
+
+- **Parameters**:
+  - `tableName` *(string)*
+  - `historyTableName` *(string)*
+  - `id` *(number|string)*
+- **Returns**: `{ status, message } | { status, error }`
+
 ### `getAll(tableName, options = {}, useCache = true)`
 - **Description**: Retrieves all records with optional sorting and pagination.
 - **Parameters**:
@@ -602,12 +709,76 @@ function addEmployeeWithValidation() {
   - `useCache` *(boolean, optional)*: Whether to use cached data.
 - **Returns**: Status object with `status`, `data`, and `message` or `error`.
 
+### **New**: `readIdList(tableName, ids)`
+Reads multiple records by an array of IDs.
+
+- **Parameters**:
+  - `tableName` *(string)*
+  - `ids` *(Array<number>)*: IDs to retrieve.
+- **Returns**:
+  - `status`: 200 or 500
+  - `data`: Array of found records
+  - `notFound`: Array of missing IDs
+
 ### `applyColorScheme(tableName, colorScheme)`
 - **Description**: Applies a color scheme to a table for better visualization.
 - **Parameters**:
   - `tableName` *(string)*: Name of the table.
   - `colorScheme` *(string)*: Predefined color scheme (`red`, `blue`, `green`, `orange`, `purple`).
 - **Returns**: Nothing. Throws an error if the color scheme is invalid.
+
+### New: **Many-to-Many Relationship Methods**
+
+#### `createManyToManyTableConfig(config)`
+Builds a config object for a **junction** (relation) table.
+
+- **Parameters**:
+  - `entity1TableName` *(string)*
+  - `entity2TableName` *(string)*
+  - `fieldsRelatedToBothEntities` *(Object, optional)*: Additional fields to store in the relationship.
+- **Returns**: `{ status, data: { tableName, historyTableName, fields }, message } | { status, error }`
+
+#### `createJunctionRecord(junctionTableName, data, keyOrder)`
+Creates a new record in the junction table, preventing duplicate relationships.
+
+- **Parameters**:
+  - `junctionTableName` *(string)*
+  - `data` *(Object)*: Must contain the foreign keys (e.g. `tool_id`, `group_id`).
+  - `keyOrder` *(Array<string>)*: The order of these keys.
+- **Returns**: `{ status, id, action } | { status, error }`
+
+#### `getJunctionRecords(junctionTableName, sourceTableName, targetTableName, sourceId, options)`
+Fetches related records from a **many-to-many** relationship.
+
+- **Parameters**:
+  - `junctionTableName` *(string)*
+  - `sourceTableName` *(string)*
+  - `targetTableName` *(string)*
+  - `sourceId` *(number)*
+  - `options` *(Object)*: Sorting & pagination options.
+- **Returns**: `{ status, data: [...], message, metadata } | { status, error }`
+
+#### `updateJunctionRecord(junctionTableName, id, data, keyOrder)`
+Updates a record in the junction table, also preventing duplicate relationships.
+
+- **Parameters**:
+  - `junctionTableName` *(string)*
+  - `id` *(number)*
+  - `data` *(Object)*
+  - `keyOrder` *(Array<string>)*
+- **Returns**: `{ status, id, data, action } | { status, error }`
+
+#### `checkTableIntegrity(junctionTableName, junctionHistoryTableName)`
+Validates the foreign key references in a junction table; moves invalid rows to its history table.
+
+- **Returns**: `{ status, count, message } | { status, error }`
+
+### **Locking Methods**
+
+#### `releaseLocks()`
+Releases all active locks (both script-level and user-level) held by this `DB` instance.
+
+---
 
 ## 📝 Example Use Case
 

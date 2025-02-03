@@ -1,17 +1,50 @@
-# 📊 Clase CRUD de Google Apps Script para Google Sheets
+## Versión en Español
 
-¡Bienvenido a la **Clase CRUD de Google Apps Script para Google Sheets**! Esta biblioteca simplifica la gestión de tus Google Sheets como bases de datos, permitiéndote realizar operaciones de **Crear, Leer, Actualizar** y **Eliminar** (CRUD) con facilidad. Ya sea que estés construyendo un CRM, un sistema de inventario o cualquier aplicación basada en datos, ¡esta biblioteca te tiene cubierto! 🚀
+# 📊 Clase de CRUD para Google Apps Script con Google Sheets (v1.0.0)
+
+¡Bienvenido a la **Clase de CRUD para Google Apps Script con Google Sheets**! Esta biblioteca facilita el uso de Google Sheets como bases de datos, permitiendo realizar operaciones **Crear, Leer, Actualizar** y **Eliminar** (CRUD) de manera sencilla. Ya sea que estés construyendo un CRM, un sistema de inventario o cualquier aplicación orientada a datos, esta librería te ayudará. ¡Empecemos! 🚀
 
 ![CRUD](https://img.icons8.com/color/96/000000/database.png)
 
-## 🌟 Características
+## 🌟 Funcionalidades
 
-- **✨ Operaciones CRUD**: Crea, lee, actualiza y elimina registros en Google Sheets sin problemas.
-- **📜 Seguimiento de Historial**: Rastrea automáticamente las eliminaciones con tablas de historial.
-- **🔍 Ordenamiento y Paginación**: Ordena y pagina tus datos fácilmente para una mejor gestión.
+- **✨ Operaciones CRUD**: Crea, lee, actualiza y elimina registros en Google Sheets sin complicaciones.
+- **📜 Historial de Borrados**: Lleva un registro de las eliminaciones a través de tablas de historial.
+- **🔍 Ordenamiento y Paginación**: Organiza y distribuye tus datos de manera efectiva.
 - **✅ Validación de Tipos**: Asegura la integridad de los datos con verificación de tipos (`number`, `string`, `boolean`, `date`).
-- **🎨 Esquemas de Color Personalizables**: Embellece tus hojas con temas de color predefinidos.
-- **⚡️ Caching**: Mejora el rendimiento con mecanismos de caché integrados.
+- **📦 **Nuevo** Manejo de Concurrencia**: Evita conflictos en operaciones simultáneas con bloqueos (locks) para lectura y escritura.
+- **🔗 **Nuevo** Relaciones Muchos-a-Muchos**: Crea y gestiona tablas de relación (junction) para datos complejos.
+- **⚡️ Caché Integrado**: Mejora el rendimiento con mecanismos de cache incorporados.
+- **🎨 Esquemas de Colores**: Aplica temas de color predeterminados a tus hojas.
+
+## 🎉 Novedades en la versión v1.0.0
+
+1. **Manejo de Concurrencia**
+  - **Bloqueo (Lock) para Crear/Actualizar/Eliminar** y así evitar que se sobreescriban datos por operaciones simultáneas.
+  - Método nuevo:
+    - `releaseLocks()`: Libera todos los bloqueos activos mantenidos por la instancia.
+
+2. **Relaciones Muchos-a-Muchos**
+  - Sencilla creación y gestión de **tablas de relación** (junction).
+  - Métodos nuevos:
+    - `createManyToManyTableConfig(config)`: Genera un objeto de configuración para una tabla de relación.
+    - `createJunctionRecord(junctionTableName, data, keyOrder)`: Crea un registro en la tabla de relación, asegurando no duplicar la misma combinación.
+    - `getJunctionRecords(junctionTableName, sourceTableName, targetTableName, sourceId, options)`: Obtiene datos relacionados a través de una tabla de relación.
+    - `updateJunctionRecord(junctionTableName, id, data, keyOrder)`: Actualiza un registro existente en la tabla de relación.
+
+3. **Eliminación en Cascada**
+  - `removeWithCascade(tableName, historyTableName, id)`: Elimina un registro principal y, adicionalmente, sus referencias en tablas de relación.
+
+4. **Lectura en Bloque (Bulk Read)**
+  - `readIdList(tableName, ids)`: Lee varios registros a partir de una lista de IDs en una sola operación.
+
+5. **Verificación de Integridad**
+  - `checkTableIntegrity(junctionTableName, junctionHistoryTableName)`: Revisa la validez de llaves foráneas en tablas de relación y mueve los registros inválidos a la tabla de historial.
+
+6. **Registros y Logs Detallados**
+  - Métodos como `createWithLogs()` y `updateWithLogs()` ofrecen mayor visibilidad para depuración.
+
+---
 
 ## 📦 Instalación
 
@@ -438,6 +471,18 @@ function deleteEmployee(id) {
 }
 ```
 
+### **Nuevo**: Eliminación en Cascada
+
+Para tablas relacionadas mediante “muchos-a-muchos” (junctions), puedes emplear:
+
+```javascript
+function deleteEmployeeCascade(id) {
+  // Elimina al empleado y sus registros relacionados en las tablas de unión
+  const deleteResult = db.removeWithCascade('EMPLOYEES', 'DELETED_EMPLOYEES', id);
+  return JSON.stringify(deleteResult);
+}
+```
+
 2. Llámala cuando sea necesario
 ```javascript
 google.script.run
@@ -524,6 +569,54 @@ function addEmployeeWithValidation() {
   }
 }
 ```
+### 🔗 Relaciones Muchos-a-Muchos
+
+Crea tablas de unión (junction) para modelar este tipo de relación, p.ej. `PROJECTS` <-> `EMPLOYEES`:
+
+```javascript
+// 1. Crea la configuración
+const relationConfig = db.createManyToManyTableConfig({
+  entity1TableName: "PROJECTS",
+  entity2TableName: "EMPLOYEES",
+  fieldsRelatedToBothEntities: {
+    extra_field: "string" // opcional
+  }
+});
+
+/*
+ relationConfig.data => {
+   tableName: "PROJECTS_EMPLOYEES_RELATION",
+   historyTableName: "DELETED_PROJECTS_EMPLOYEES_RELATION",
+   fields: { created_at: "date", projects_id: "number", employees_id: "number", ...}
+ }
+*/
+
+// 2. Crea la tabla
+db.createTable(relationConfig.data);
+db.putTableIntoDbContext(relationConfig.data);
+
+// 3. Inserta un registro en la tabla de relación
+db.createJunctionRecord("PROJECTS_EMPLOYEES_RELATION", {
+  projects_id: 10,
+  employees_id: 5
+}, ["projects_id", "employees_id"]);
+```
+
+### 🔎 Lectura en Bloque (Bulk Read)
+
+Lee varios registros a la vez:
+
+```javascript
+function readManyEmployees() {
+  // Pasa un array con los IDs
+  const result = db.readIdList("EMPLOYEES", [1,2,3,100]);
+  console.log(result.data);     // Registros encontrados
+  console.log(result.notFound); // IDs que no se encontraron
+  return JSON.stringify(result);
+}
+```
+
+---
 
 ## 🔍 Documentación Detallada de Funciones
 
@@ -581,6 +674,16 @@ function addEmployeeWithValidation() {
   - `id` *(number|string)*: ID del registro.
 - **Retorna**: Objeto de estado con `status` y `message` o `error`.
 
+### **Nuevo**: `removeWithCascade(tableName, historyTableName, id)`
+Elimina un registro y, además, sus referencias en cualquier tabla de unión (junction).
+
+- **Parámetros**:
+  - `tableName` *(string)*
+  - `historyTableName` *(string)*
+  - `id` *(number|string)*
+- **Retorna**: `{ status, message } | { status, error }`
+
+
 ### `getAll(tableName, options = {}, useCache = true)`
 - **Descripción**: Recupera todos los registros con opciones opcionales de ordenamiento y paginación.
 - **Parámetros**:
@@ -599,6 +702,59 @@ function addEmployeeWithValidation() {
   - `tableName` *(string)*: Nombre de la tabla.
   - `colorScheme` *(string)*: Esquema de color predefinido (`red`, `blue`, `green`, `orange`, `purple`).
 - **Retorna**: Nada. Lanza un error si el esquema de color es inválido.
+
+### Nuevo: **Relaciones Muchos-a-Muchos**
+
+#### `createManyToManyTableConfig(config)`
+Genera la configuración para una tabla de unión (junction).
+
+- **Parámetros**:
+  - `entity1TableName` *(string)*
+  - `entity2TableName` *(string)*
+  - `fieldsRelatedToBothEntities` *(Object, opcional)*
+- **Retorna**: `{ status, data: { tableName, historyTableName, fields }, message } | { status, error }`
+
+#### `createJunctionRecord(junctionTableName, data, keyOrder)`
+Crea un nuevo registro en la tabla de unión, evitando duplicar la misma combinación de llaves.
+
+- **Parámetros**:
+  - `junctionTableName` *(string)*
+  - `data` *(Object)*
+  - `keyOrder` *(Array<string>)*
+- **Retorna**: `{ status, id, action } | { status, error }`
+
+#### `getJunctionRecords(junctionTableName, sourceTableName, targetTableName, sourceId, options)`
+Obtiene registros relacionados a través de una tabla de unión.
+
+- **Parámetros**:
+  - `junctionTableName` *(string)*
+  - `sourceTableName` *(string)*
+  - `targetTableName` *(string)*
+  - `sourceId` *(number)*
+  - `options` *(Object)*: Ordenamiento/paginación.
+- **Retorna**: `{ status, data: [...], message, metadata } | { status, error }`
+
+#### `updateJunctionRecord(junctionTableName, id, data, keyOrder)`
+Actualiza un registro en la tabla de unión, también evitando duplicados.
+
+- **Parámetros**:
+  - `junctionTableName` *(string)*
+  - `id` *(number)*
+  - `data` *(Object)*
+  - `keyOrder` *(Array<string>)*
+- **Retorna**: `{ status, id, data, action } | { status, error }`
+
+#### `checkTableIntegrity(junctionTableName, junctionHistoryTableName)`
+Valida referencias foráneas en una tabla de unión; mueve los inválidos a su tabla de historial.
+
+- **Retorna**: `{ status, count, message } | { status, error }`
+
+### **Bloqueos (Lock)**
+
+#### `releaseLocks()`
+Libera todos los bloqueos activos (tanto a nivel de script como de usuario) de la instancia `DB`.
+
+---
 
 ## 📝 Caso de Uso de Ejemplo
 
