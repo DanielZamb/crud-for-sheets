@@ -761,157 +761,432 @@ Libera todos los bloqueos activos (tanto a nivel de script como de usuario) de l
 Aquí se muestra cómo puedes integrar la clase `DB` en una aplicación web utilizando la función `doGet` de Google Apps Script.
 
 ```javascript
-/**
- * Serve the web application.
- */
 function doGet(e) {
-  return HtmlService.createTemplateFromFile("index")
-    .evaluate()
-    .setTitle("Test_crud_app")
-    .setFaviconUrl("YOUR_ICON")
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  var Template = HtmlService.createTemplateFromFile("index").evaluate().setTitle("Test CRUD WebApp").setFaviconUrl("https://cdn-icons-png.freepik.com/512/9850/9850812.png").addMetaTag('viewport', 'width=device-width, initial-scale=1').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  return Template;
 }
 
-/**
- * Include HTML files.
- */
-function include(filename){
+function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
-// Initialize the database
-const db = DB.init("SHEET_NAME", "YOUR_SHEET_ID");
+const db = CamDB.init('testing-DB', YOUR_ID);
 
-// Define table configurations
-const requestTableConfig = {
-  tableName: "PQRS",
-  historyTableName: "DELETED_PQRS",
+const categoryTableConfig = {
+  tableName: "CATEGORY",
+  historyTableName: "DELETED_CATEGORY",
   fields: {
-    client_uuid: "string",
-    applicant_type: "string",
-    type: "string",
-    class_t: "string",
-    ot_number: "number",
-    facts: "string",
-    document_type: "string",
-    document_number: "number",
-    social_reason: "string",
     name: "string",
+    created_at: "date"
+  }
+}
+
+const productTableConfig = {
+  tableName: "PRODUCT",
+  historyTableName: "DELETED_PRODUCT",
+  fields: {
+    name: "string",
+    price: "number",
+    category_fk: "number",
+    created_at: "date"
+  }
+}
+
+const customerTableConfig = {
+  tableName: "CUSTOMER",
+  historyTableName: "DELETED_CUSTOMER",
+  fields: {
+    first_name: "string",
     last_name: "string",
     email: "string",
-    phone: "number",
-    email_comm: "boolean",
-    wpp_comm: "boolean",
-    department: "string",
-    city: "string",
     address: "string",
-    additional: "string",
-    provider: "string",
-    evidence_files_ids: "string",
-    efficacy: "number",
-    solved: "boolean",
-    responsible: 'string',
-    reason: 'string' 
+    created_at: "date"
   }
-};
+}
 
-const actionTableConfig = {
-  tableName: "ACTION_PLAN",
-  historyTableName: "DELETED_ACTION_PLAN",
+const orderTableConfig = {
+  tableName: "ORDER",
+  historyTableName: "DELETED_ORDER",
   fields: {
-    pqrs_fk: "number",
-    plan: "string",
-    date_applied: "date",
-    responsible: "string",
-    state: "boolean",
-    observations: "string",
+    customer_fk: "number",
+    created_at: "date"
   }
-};
+}
 
-// Create the table OR
-console.log(db.createTable(requestTableConfig));
-console.log(db.createTable(actionTableConfig));
+function createSchema(){
+  console.log(db.createTable(categoryTableConfig));
+  console.log(db.createTable(productTableConfig));
+  console.log(db.createTable(customerTableConfig));
+  console.log(db.createTable(orderTableConfig));
+  console.log(db.createTable(orderDetailConfig))
+}
 
-// Add tables to the database context
-console.log(db.putTableIntoDbContext(requestTableConfig));
-console.log(db.putTableIntoDbContext(actionTableConfig));
+
+console.log(db.putTableIntoDbContext(categoryTableConfig));
+console.log(db.putTableIntoDbContext(productTableConfig));
+console.log(db.putTableIntoDbContext(customerTableConfig));
+console.log(db.putTableIntoDbContext(orderTableConfig));
+
+const responseCreation = db.createManyToManyTableConfig({
+  entity1TableName : orderTableConfig.tableName,
+  entity2TableName : productTableConfig.tableName,
+  fieldsRelatedToBothEntities: {
+    quantity: "number"
+  }
+})
 
 
-// Apply a color scheme to the ACTION_PLAN table
-console.log(db.applyColorScheme(actionTableConfig.tableName, 'orange'));
+const orderDetailConfig = responseCreation.data;
+
+console.log(db.putTableIntoDbContext(orderDetailConfig));
+
 
 /**
- * Read all records from the PQRS table.
+ * ||=====================================================||
+ * ||                   CRUD for CATEGORY                 ||
+ * ||=====================================================||
  */
-function readPqrsTable(){
-  const response = db.getAll("PQRS", 
-                              { /* options */ },
-                              false); // Disable cache for fresh data
-  Logger.log(response.message);
-  console.log(response.data);
+
+function getCategoryRelatedRecords(foreignKey, field="category_fk", fieldIndex = 4, options={}, useCache=false){
+  const response = db.getRelatedRecords(
+          foreignKey,
+          productTableConfig.tableName,
+          field,
+          fieldIndex,
+          options,
+          useCache)
+  return JSON.stringify(response);
+}
+
+function createCategory(newCategory){
+  newCategory.created_at = new Date(newCategory.created_at);
+  const response = db.create(
+          categoryTableConfig.tableName,
+          newCategory,
+          Object.keys(categoryTableConfig.fields)
+  )
+
+  console.log(response);
+  return JSON.stringify(response);
+}
+
+
+
+function readCategoryTable(){
+  const response = db.getAll(
+          categoryTableConfig.tableName,
+          options={},
+          useCache = false
+  )
+  console.log(response.status)
+  console.log(response.message)
+
+  return JSON.stringify(response);
+}
+
+function updateCategory(updatedCategory, id){
+  // console.log("to update:",updatedCategory)
+  // console.log("id",id)
+  updatedCategory.created_at = new Date(updatedCategory.created_at);
+
+  const response = db.update(
+          categoryTableConfig.tableName,
+          id,
+          updatedCategory,
+          Object.keys(categoryTableConfig.fields)
+  )
+
+  console.log(response);
+
+  return JSON.stringify(response);
+}
+
+function readCategoryById (id){
+  const response = db.read(
+          categoryTableConfig.tableName,
+          id
+  )
+
+  console.log(response)
+
+  return JSON.stringify(response);
+}
+
+function removeCategory(id){
+  const response = db.remove(
+          categoryTableConfig.tableName,
+          categoryTableConfig.historyTableName,
+          id
+  )
+
+  console.log(response);
+
   return JSON.stringify(response);
 }
 
 /**
- * Update a record in the PQRS table.
- * @param {Object} newPqrs - The updated PQRS data.
+ * ||=====================================================||
+ * ||               CRUD for PRODUCT TABLE                ||
+ * ||=====================================================||
  */
-function updatePQRS(updatedPqrs){
-  console.log(updatedPqrs);
-  const response = db.update(requestTableConfig.tableName,
-                            updatedPqrs.id,
-                            updatedPqrs,
-                            Object.keys(requestTableConfig.fields));
-  Logger.log(response);
+function createProduct(newProduct) {
+  // Convert dates as needed
+  if (newProduct.created_at) {
+    newProduct.created_at = new Date(newProduct.created_at);
+  }
+  const response = db.create(
+          productTableConfig.tableName,
+          newProduct,
+          Object.keys(productTableConfig.fields)
+  );
   return JSON.stringify(response);
 }
 
-/**
- * Read all records from the ACTION_PLAN table.
- */
-function readActionPlanTable(){
-  const response = db.getAll(actionTableConfig.tableName, 
-                              { /* options */ },
-                              false); // Disable cache for fresh data
-  Logger.log(response.message);
-  console.log(response.data);
+function readProductTable() {
+  const response = db.getAll(
+          productTableConfig.tableName,
+          {},      // options = {}
+          false    // useCache = false
+  );
   return JSON.stringify(response);
 }
 
-/**
- * Create a new Action Plan.
- * @param {Object} newActionPlan - The Action Plan data to create.
- */
-function createActionPlan(newActionPlan){
-  const response = db.create(actionTableConfig.tableName,
-                      newActionPlan,
-                      Object.keys(actionTableConfig.fields));
-  Logger.log(response);
+function readProductById(id) {
+  const response = db.read(productTableConfig.tableName, id);
   return JSON.stringify(response);
 }
 
-/**
- * Delete an Action Plan by ID.
- * @param {number} id - The ID of the Action Plan to delete.
- */
-function deleteActionPlan(id){
-  const response = db.remove(actionTableConfig.tableName, actionTableConfig.historyTableName, id);
-  Logger.log(response);
+function updateProduct(updatedProduct, id) {
+  if (updatedProduct.created_at) {
+    updatedProduct.created_at = new Date(updatedProduct.created_at);
+  }
+  const response = db.update(
+          productTableConfig.tableName,
+          id,
+          updatedProduct,
+          Object.keys(productTableConfig.fields)
+  );
   return JSON.stringify(response);
 }
 
+function removeProduct(id) {
+  const response = db.removeWithCascade(
+          productTableConfig.tableName,
+          productTableConfig.historyTableName,
+          id
+  );
+  return JSON.stringify(response);
+}
+
+
 /**
- * Update an existing Action Plan.
- * @param {Object} newActionPlan - The updated Action Plan data.
+ * ||=====================================================||
+ * ||              CRUD for CUSTOMER TABLE                ||
+ * ||=====================================================||
  */
-function updateActionPlan(updatedActionPlan){
-  console.log(updatedActionPlan);
-  const response = db.update(actionTableConfig.tableName,
-                            updatedActionPlan.id,
-                            updatedActionPlan,
-                            Object.keys(actionTableConfig.fields));
-  Logger.log(response);
+
+function getRelatedCustomerRecords(foreignKey, field="customer_fk", fieldIndex= 2,options={}, useCache=false){
+  const response = db.getRelatedRecords(
+          foreignKey,
+          orderTableConfig.tableName,
+          field,
+          fieldIndex,
+          options,
+          useCache
+  )
+
+  return JSON.stringify(response);
+}
+
+function createCustomer(newCustomer) {
+  if (newCustomer.created_at) {
+    newCustomer.created_at = new Date(newCustomer.created_at);
+  }
+  const response = db.create(
+          customerTableConfig.tableName,
+          newCustomer,
+          Object.keys(customerTableConfig.fields)
+  );
+  return JSON.stringify(response);
+}
+
+function readCustomerTable() {
+  const response = db.getAll(
+          customerTableConfig.tableName,
+          {},
+          false
+  );
+  return JSON.stringify(response);
+}
+
+function readCustomerById(id) {
+  const response = db.read(customerTableConfig.tableName, id);
+  return JSON.stringify(response);
+}
+
+function updateCustomer(updatedCustomer, id) {
+  if (updatedCustomer.created_at) {
+    updatedCustomer.created_at = new Date(updatedCustomer.created_at);
+  }
+  const response = db.update(
+          customerTableConfig.tableName,
+          id,
+          updatedCustomer,
+          Object.keys(customerTableConfig.fields)
+  );
+  return JSON.stringify(response);
+}
+
+function removeCustomer(id) {
+  const response = db.remove(
+          customerTableConfig.tableName,
+          customerTableConfig.historyTableName,
+          id
+  );
+  return JSON.stringify(response);
+}
+
+
+/**
+ * ||=====================================================||
+ * ||                 CRUD for ORDER TABLE                ||
+ * ||=====================================================||
+ */
+function createOrder(newOrder) {
+  if (newOrder.created_at) {
+    newOrder.created_at = new Date(newOrder.created_at);
+  }
+  const response = db.create(
+          orderTableConfig.tableName,
+          newOrder,
+          Object.keys(orderTableConfig.fields)
+  );
+  return JSON.stringify(response);
+}
+
+function readOrderTable() {
+  const response = db.getAll(orderTableConfig.tableName, {}, false);
+  return JSON.stringify(response);
+}
+
+function readOrderById(id) {
+  const response = db.read(orderTableConfig.tableName, id);
+  return JSON.stringify(response);
+}
+
+function updateOrder(updatedOrder, id) {
+  if (updatedOrder.created_at) {
+    updatedOrder.created_at = new Date(updatedOrder.created_at);
+  }
+  const response = db.update(
+          orderTableConfig.tableName,
+          id,
+          updatedOrder,
+          Object.keys(orderTableConfig.fields)
+  );
+  return JSON.stringify(response);
+}
+
+function removeOrder(id) {
+  const response = db.removeWithCascade(
+          orderTableConfig.tableName,
+          orderTableConfig.historyTableName,
+          id
+  );
+  return JSON.stringify(response);
+}
+
+
+/**
+ * ||=====================================================||
+ * ||         CRUD for ORDER_DETAIL (Many-to-Many)        ||
+ * ||=====================================================||
+ * The 'orderDetailConfig' object was generated via:
+ * const responseCreation = db.createManyToManyTableConfig({ ... });
+ * const orderDetailConfig = responseCreation.data;
+ */
+function createOrderDetail(newOrderDetail) {
+  if (newOrderDetail.created_at) {
+    newOrderDetail.created_at = new Date(newOrderDetail.created_at);
+  }
+  // orderDetailConfig.fields => { created_at, order_id, product_id, quantity, ... }
+  const response = db.create(
+          orderDetailConfig.tableName,
+          newOrderDetail,
+          Object.keys(orderDetailConfig.fields)
+  );
+  return JSON.stringify(response);
+}
+
+function readOrderDetailTable() {
+  const response = db.getAll(orderDetailConfig.tableName, {}, false);
+  return JSON.stringify(response);
+}
+
+function readOrderDetailById(id) {
+  const response = db.read(orderDetailConfig.tableName, id);
+  return JSON.stringify(response);
+}
+
+function updateOrderDetail(updatedOrderDetail, id) {
+  if (updatedOrderDetail.created_at) {
+    updatedOrderDetail.created_at = new Date(updatedOrderDetail.created_at);
+  }
+  const response = db.update(
+          orderDetailConfig.tableName,
+          id,
+          updatedOrderDetail,
+          Object.keys(orderDetailConfig.fields)
+  );
+  return JSON.stringify(response);
+}
+
+function removeOrderDetail(id) {
+  const response = db.remove(
+          orderDetailConfig.tableName,
+          orderDetailConfig.historyTableName,
+          id
+  );
+  return JSON.stringify(response);
+}
+
+function readOrderDetailFromOrder(sourceId){
+  const response = db.getJunctionRecords(
+          orderDetailConfig.tableName,
+          orderTableConfig.tableName,
+          productTableConfig.tableName,
+          sourceId,
+          options = {}
+  )
+
+  console.log(response.status);
+  console.log(response.message);
+  console.log(response.metadata);
+
+  for (record of response.data){
+    console.log(record);
+  }
+
+  return JSON.stringify(response);
+}
+
+function readOrderDetailFromProduct(sourceId){
+  const response = db.getJunctionRecords(
+          orderDetailConfig.tableName,
+          productTableConfig.tableName,
+          orderTableConfig.tableName,
+          sourceId,
+          options = {}
+  )
+
+  console.log(response.status);
+  console.log(response.message);
+  console.log(response.metadata);
+
+  for (record of response.data){
+    console.log(record);
+  }
+
   return JSON.stringify(response);
 }
 ```
