@@ -4,10 +4,10 @@ description: Important notes on date serialization, table headers, and more.
 ---
 
 
-# Serialization problem when calling the backend
+## Serialization problem when calling the backend
 AppScript has a bit of a problem with serialization, and as this library attempts (poorly) to manage all the fields with js primitives, when you try to retrieve something from the backend, say a `Date`, it will not pass anything.
 
-## Example
+### Example
 Let's say you have the following `Order table`
 
 ```javascript
@@ -49,7 +49,7 @@ google.script.run
 
 In fact, it wont return anything. It will print out `null` or `undefined` in the console. The reason being that the GoogleAppsScript Serialization Engine doesn't know how to handle `Date()` types when returning them from a function call to the `.gs` file.
 
-## The Workaround
+### The Workaround
 
 Just return everything over a `JSON.stringify(record)`, and the de-serialize it in the client `JSON.parse(record)`.
 
@@ -77,10 +77,10 @@ Uncaught SyntaxError: Unexpected token '}', "}" is not valid JSON
 ```
 But hey, who did told you to use `javascript`? if you wanted type-safety, better error management and 0 bloat in your code, you should have known better.
 
-## My personal recomendation
+### My personal recomendation
 Using javascript is purely a skill issue, *git gud*.
 
-# 2. The way the tables are created
+## 2. The way the tables are created
 
 Whenever the library creates tables, it automatically includes two default columns at the beginning: **[ID, DATE]**. The library *expects* that any table included in the schema context **also** begins with these two columns in the sheet.
 
@@ -88,11 +88,11 @@ So, *your sheet* should look like this:
 
 ![alt text](image-1.png)
 
-## Why, you ask?
+### Why, you ask?
 
 Well, i found those 2 fields to be pretty useful when using any of the CRUD operations on any table i was making, so i just put them as the default columns on every creation.
 
-## The important Bit ❗❗
+### The important Bit ❗❗
 
 As those fields are the default and are **expected** you **DO NOT** have to declare them when creating the *tableConfig* objects. 
 
@@ -128,7 +128,7 @@ orderTableConfig = {
 
 ```
 
-# 3. Beware of the SCREAMING_SNAKE_CASE_HEADERS
+## 3. Beware of the SCREAMING_SNAKE_CASE_HEADERS
 
 As mentioned, the library expects the **[ID, DATE]** fields to be the first two columns of any table. Additionally, it is important that the tables passed to the schema context adhere to the following conventions:
 
@@ -139,7 +139,7 @@ As mentioned, the library expects the **[ID, DATE]** fields to be the first two 
 
 These conventions ensure work as expected.
 
-# Okay Sergeant Buzzkill, i got it 😒
+## Okay Sergeant Buzzkill, i got it 😒
 
 ![alt text](any-more-questions-sergeant-buzz-kill-charlie.gif)
 
