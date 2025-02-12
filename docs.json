@@ -6,8 +6,8 @@
     "group": "Getting Started",
     "pages": [
       {
-        "title": "Getting to know docs.page",
-        "href": "/index",
+        "title": "Home",
+        "href": "/",
         "icon": "rocket"
       },
       {
