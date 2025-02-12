@@ -14,6 +14,11 @@
         "title": "Next Steps",
         "href": "/next-steps",
         "icon": "arrow-right"
+      },
+      {
+        "title": "Installation",
+        "href": "/installation",
+        "icon": "download"
       }
     ]
     }
