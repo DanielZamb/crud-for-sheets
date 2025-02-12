@@ -24,6 +24,11 @@
         "title": "Usage",
         "href": "/usage",
         "icon": "code"
+      },
+      {
+        "title": "Advanced Examples",
+        "href": "/advanced-examples",
+        "icon": "flask"
       }
     ]
     }
