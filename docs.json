@@ -1,6 +1,6 @@
 {
-  "name": "My Docs",
-  "description": "My documentation site",
+  "name": "gas-DB",
+  "description": "Docs for the crud-for-sheets.js project!",
   "sidebar": [
   {
     "group": "Getting Started",
