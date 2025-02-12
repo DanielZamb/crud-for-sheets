@@ -1,0 +1,29 @@
+---
+title: Usage
+description: In this guide, you will learn how to install the Google Apps Script CRUD for Google Sheets.
+---
+
+# 🚀 Initialization
+
+Initialize the database by creating a new instance of the `DB` class. You can either create a new spreadsheet or connect to an existing one using its ID.
+
+```js
+/**
+ * Initialize the database.
+ */
+
+// Declare db in your global scope in order to use it in any part of the script
+const db;
+const existingDb;
+
+function initializeDatabase() {
+  // Initialize a new spreadsheet database
+  db = DB.init('MyDatabase');
+
+  // OR connect to an existing spreadsheet using its ID
+  existingDb = DB.init('ExistingDatabase', 'YOUR_SPREADSHEET_ID');
+
+  // Log the creation result
+  console.log(db.getCreationResult());
+}
+```
