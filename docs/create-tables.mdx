@@ -91,7 +91,7 @@ tables.forEach((table) => {
 });
 ```
 
-## Key Points:
+## Key Points
 
 1. **You leave the code for putting tables in the schema context** outside of any function, in the global scope, as `.gs` files are stateless, and will be called in a `clean slate` state each and every time any `google.script.run` is called in your `main.js`.
 2. **You have the tables defined** in the global scope, so you can access them from anywhere in your script.
