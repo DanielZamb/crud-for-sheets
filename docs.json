@@ -7,7 +7,7 @@
     "pages": [
       {
         "title": "Getting to know docs.page",
-        "href": "/",
+        "href": "/index",
         "icon": "rocket"
       },
       {
@@ -16,6 +16,6 @@
         "icon": "arrow-right"
       }
     ]
-  }
-]
+    }
+  ]
 }
