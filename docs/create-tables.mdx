@@ -1,6 +1,6 @@
 ---
-title: Usage
-description: In this guide, you will learn how to install the Google Apps Script CRUD for Google Sheets.
+title: Creating Tables
+description: Learn how to initialize, create tables, and put them into the schema context for CRUD operations.
 ---
 
 # 🚀 Initialization
@@ -91,7 +91,8 @@ tables.forEach((table) => {
 });
 ```
 
-The key thing here is to make sure that:
+## Key Points:
+
 1. **You leave the code for putting tables in the schema context** outside of any function, in the global scope, as `.gs` files are stateless, and will be called in a `clean slate` state each and every time any `google.script.run` is called in your `main.js`.
 2. **You have the tables defined** in the global scope, so you can access them from anywhere in your script.
 3. **You have the DB instance** defined in the global scope, so you can access it from anywhere in your script (either by copying the script or adding the library).

@@ -21,9 +21,14 @@
         "icon": "download"
       },
       {
-        "title": "Usage",
-        "href": "/usage",
-        "icon": "code"
+        "title": "Creating Tables",
+        "href": "/create-tables",
+        "icon": "table"
+      },
+      {
+        "title": "Caveats",
+        "href": "/caveats",
+        "icon": "alert"
       },
       {
         "title": "Advanced Examples",
