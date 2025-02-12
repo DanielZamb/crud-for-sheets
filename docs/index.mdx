@@ -3,11 +3,9 @@ title: Home
 description: Welcome to the Google Apps Script CRUD Class for Google Sheets documentation.
 ---
 
-# 📊 Google Apps Script CRUD Class for Google Sheets
+# 📊 Google Apps Script CRUD for Google Sheets (GAS-DB)
 
 Welcome to the **Google Apps Script CRUD Class for Google Sheets**! This library simplifies managing your Google Sheets as databases, allowing you to perform **Create, Read, Update,** and **Delete** (CRUD) operations with ease. Whether you're building a CRM, inventory system, or any data-driven application, this library has got you covered! 🚀
-
-## ![CRUD](https://img.icons8.com/color/96/000000/database.png)
 
 ## 🌟 Features
 
@@ -22,3 +20,45 @@ Welcome to the **Google Apps Script CRUD Class for Google Sheets**! This library
 - **🗃 _New_ Bulk Reading**: Fetch multiple records by ID in a single call.
 
 ---
+
+## 📖 Quick Start
+
+1. **[Installation](https://use.docs.page/installation)**  
+   Learn how to add this library to your Google Apps Script project.
+2. **[Usage](https://use.docs.page/usage)**  
+   Explore how to initialize, create tables, and perform basic CRUD.
+3. **[Caveats](https://use.docs.page/caveats)**  
+   Important notes on date serialization, table headers, and more.
+4. **[CRUD Operations](https://use.docs.page/crud-operations)**  
+   A detailed guide on creating, reading, updating, and deleting records.
+5. **[Advanced Examples](https://use.docs.page/advanced-examples)**  
+   Dive deeper into bulk reading, many-to-many relationships, color schemes, and more.
+6. **[API Reference](https://use.docs.page/api-reference)**  
+   A complete breakdown of all available methods, signatures, and return structures.
+7. **[Full Code Samples](https://use.docs.page/examples)**  
+   Copy-paste ready examples demonstrating end-to-end flows.
+
+---
+
+## 🚀 What’s New in v1.0.0
+
+1. **Concurrency Locks**  
+   Locking for Create/Update/Delete operations to prevent concurrent writes on the same record.
+2. **Many-to-Many Relationship Support**  
+   Easily create and manage junction tables between two different entities.
+3. **Cascade Deletion**  
+   Remove a parent record and automatically clean up related entries in junction tables.
+4. **Bulk Read**  
+   Fetch multiple records by ID with a single call.
+5. **Integrity Checks**  
+   Validate foreign key references in your junction tables.
+6. **Enhanced Logging & Debug**  
+   Methods like `createWithLogs()` and `updateWithLogs()` for more detailed output.
+
+---
+
+## Contributing
+
+We welcome contributions! Feel free to open issues or pull requests on our [GitHub repository](#https://github.com/DanielZamb/crud-for-sheets/).
+
+If you have any questions or suggestions, reach out or file an issue. Thanks for using **GAS-DB**!
