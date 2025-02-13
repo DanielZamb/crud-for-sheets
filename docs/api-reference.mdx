@@ -1,149 +1,247 @@
 ---
-title: API Reference
-description: Learn how to use the API reference to perform CRUD operations on your tables.
+title: "API Reference"
+description: "Comprehensive overview of the CRUD class methods."
 ---
 
-### `init(dbName, dbId)`
+# API Reference
+
+This page lists all public methods available in the **Google Apps Script CRUD Class for Google Sheets** library, along with their parameters, return values, and a brief description.
+
+## `init(dbName, dbId?)`
 - **Description**: Creates or opens a spreadsheet database.
 - **Parameters**:
   - `dbName` *(string)*: The name of the database.
   - `dbId` *(string, optional)*: The ID of the Google Spreadsheet. If not provided, a new spreadsheet is created.
 - **Returns**: An instance of the `DB` class.
 
-### `createTable(config)`
+---
+
+## `createTable(config)`
 - **Description**: Creates a new table (sheet) in the spreadsheet.
 - **Parameters**:
   - `config` *(Object)*: Configuration object for the table.
-    - `tableName` *(string)*: Name of the table.
-    - `historyTableName` *(string, optional)*: Name of the history table for deleted records. Defaults to `DELETED_<tableName>`.
-    - `fields` *(Object)*: Key-value pairs defining field names and their types.
-      - **Supported Types**: `boolean`, `string`, `date`, `number`
-- **Returns**: Status object with `status` and `message` or `error`.
+    - **tableName** *(string)*: Name of the table.
+    - **historyTableName** *(string, optional)*: Name of the history table for deleted records (defaults to `DELETED_<tableName>`).
+    - **fields** *(Object)*: Key-value pairs defining field names and their types.
+      - *Supported Types:* `boolean`, `string`, `date`, `number`
+- **Returns**: An object with `{ status, message }` or `{ status, error }`.
 
-### `create(tableName, data, keyOrder, addUpdatePolicy = null)`
-- **Description**: Inserts a new record or updates an existing one based on the provided policy.
+---
+
+## `create(tableName, data, keyOrder, addUpdatePolicy?)`
+- **Description**: Inserts a new record or updates an existing one based on an optional policy.
 - **Parameters**:
-  - `tableName` *(string)*: Name of the table.
-  - `data` *(Object)*: Data to insert/update.
-  - `keyOrder` *(Array\<string\>)*: Order of the fields.
-  - `addUpdatePolicy` *(Object, optional)*: Policy for updating existing records.
-    - `key` *(string)*: Field to search for existing records.
-    - `value` *(any)*: Value to match for the key.
-- **Returns**: Status object with `status`, `id`, and `action` or `error`.
+  - `tableName` *(string)*  
+    The name of the table.
+  - `data` *(object)*  
+    The record data to insert or update.
+  - `keyOrder` *(string[])*  
+    The exact field order to be written.
+  - `addUpdatePolicy?` *(object)*  
+    An optional policy object. Example:
+    ```js
+    { key: 'email', value: 'test@example.com' }
+    ```
+    If a record with `{ email: 'test@example.com' }` already exists, it will be updated instead of creating a new row.
+- **Returns**: An object with `{ status, id, action }` or `{ status, error }`.
 
-### `read(tableName, id)`
-- **Description**: Retrieves a record by its ID.
+---
+
+## `read(tableName, id)`
+- **Description**: Retrieves a single record by its ID.
 - **Parameters**:
-  - `tableName` *(string)*: Name of the table.
-  - `id` *(number|string)*: ID of the record.
-- **Returns**: Status object with `status` and `data` or `error`.
+  - `tableName` *(string)*
+  - `id` *(number | string)*
+- **Returns**: `{ status, data }` or `{ status, error }`.
 
-### `update(tableName, id, data, keyOrder, typesChecked = false, addUpdatePolicy = null)`
+---
+
+## `update(tableName, id, data, keyOrder, typesChecked?, addUpdatePolicy?)`
 - **Description**: Updates an existing record.
 - **Parameters**:
-  - `tableName` *(string)*: Name of the table.
-  - `id` *(number|string)*: ID of the record.
-  - `data` *(Object)*: New data for the record.
-  - `keyOrder` *(Array\<string\>)*: Order of the fields.
-  - `typesChecked` *(boolean, optional)*: Whether types have already been validated.
-  - `addUpdatePolicy` *(Object, optional)*: Policy for additional updates.
-- **Returns**: Status object with `status`, `id`, `data`, and `action` or `error`.
+  - `tableName` *(string)*  
+    The name of the table.
+  - `id` *(number | string)*  
+    The record ID to update.
+  - `data` *(object)*  
+    The updated data.
+  - `keyOrder` *(string[])*  
+    The order of fields in the sheet.
+  - `typesChecked?` *(boolean)*  
+    Whether or not you’ve already validated data types before calling.
+  - `addUpdatePolicy?` *(object)*  
+    Similar to the create policy, if you want to handle “upsert” logic.
+- **Returns**: An object with `{ status, id, data, action }` or `{ status, error }`.
 
-### `remove(tableName, historyTableName, id)`
-- **Description**: Deletes a record and moves it to a history table.
+---
+
+## `remove(tableName, historyTableName, id)`
+- **Description**: Moves (soft-deletes) a record from its main table into the specified history table.
 - **Parameters**:
-  - `tableName` *(string)*: Name of the table.
-  - `historyTableName` *(string)*: Name of the history table.
-  - `id` *(number|string)*: ID of the record.
-- **Returns**: Status object with `status` and `message` or `error`.
+  - `tableName` *(string)*  
+    The table to remove from.
+  - `historyTableName` *(string)*  
+    The corresponding history table.
+  - `id` *(number | string)*  
+    The ID of the record to remove.
+- **Returns**: `{ status, message }` or `{ status, error }`.
 
-### **New**: `removeWithCascade(tableName, historyTableName, id)`
-Removes a parent record **and** its related records in any junction tables.
+---
 
+## `removeWithCascade(tableName, historyTableName, id)`
+- **Description**: Removes a parent record **and** automatically deletes or archives the related records from any associated junction tables.
 - **Parameters**:
   - `tableName` *(string)*
   - `historyTableName` *(string)*
-  - `id` *(number|string)*
-- **Returns**: `{ status, message } | { status, error }`
+  - `id` *(number | string)*
+- **Returns**: `{ status, message }` or `{ status, error }`.
 
-### `getAll(tableName, options = {}, useCache = true)`
-- **Description**: Retrieves all records with optional sorting and pagination.
-- **Parameters**:
-  - `tableName` *(string)*: Name of the table.
-  - `options` *(Object, optional)*:
-    - `page` *(number)*: Page number for pagination.
-    - `pageSize` *(number)*: Number of records per page.
-    - `sortBy` *(string)*: Field to sort by.
-    - `sortOrder` *(string)*: `'asc'` or `'desc'`.
-  - `useCache` *(boolean, optional)*: Whether to use cached data.
-- **Returns**: Status object with `status`, `data`, and `message` or `error`.
+---
 
-### **New**: `readIdList(tableName, ids)`
-Reads multiple records by an array of IDs.
-
+## `getAll(tableName, options?, useCache?)`
+- **Description**: Retrieves all records from a table with optional pagination, sorting, and caching.
 - **Parameters**:
   - `tableName` *(string)*
-  - `ids` *(Array\<number\>)*: IDs to retrieve.
+  - `options?` *(object)*  
+    - `page` *(number)*: Page number (for pagination).  
+    - `pageSize` *(number)*: Records per page.  
+    - `sortBy` *(string)*: Field name to sort by.  
+    - `sortOrder` *(string)*: `'asc'` or `'desc'`.  
+  - `useCache?` *(boolean)*  
+    Defaults to `true`.
+- **Returns**: `{ status, data, message }` or `{ status, error }`.
+
+---
+
+## `readIdList(tableName, ids)`
+- **Description**: Retrieves multiple records by an array of IDs in a single call.
+- **Parameters**:
+  - `tableName` *(string)*
+  - `ids` *(number[])*  
+    An array of IDs to fetch.
 - **Returns**:
-  - `status`: 200 or 500
+  - `status` (200 or 500)
   - `data`: Array of found records
   - `notFound`: Array of missing IDs
 
-### `applyColorScheme(tableName, colorScheme)`
+---
+
+## `getRelatedRecords(foreignKey, tableName, field, fieldIndex, options = {}, useCache = false)`
+- **Description**: Fetches all records in a given table that match a **numeric foreign key** in a specified column.
+- **Parameters**:
+  - `foreignKey` *(number)*  
+    The foreign key value to filter by.  
+  - `tableName` *(string)*  
+    The name of the table (sheet) where the records reside.
+  - `field` *(string)*  
+    The column header (in the library’s “fields” object) that contains the foreign key.
+  - `fieldIndex` *(number)*  
+    The zero-based index of the field in the sheet.
+  - `options?` *(object)*  
+    - `page?: number`  
+    - `pageSize?: number`  
+    - `sortBy?: string`  
+    - `sortOrder?: 'asc' | 'desc'`
+  - `useCache?` *(boolean)*  
+    Whether to retrieve from an existing cache if available (default: `false`).
+- **Returns**:  
+  - On success: `{ status: 200, data: any[], message: string }`  
+  - On failure: `{ status: 500, error: string }`
+
+---
+
+## `getRelatedRecordsWithTextFinder(foreignKey, tableName, field, fieldIndex, options = {}, useCache = false)`
+- **Description**: Similar to `getRelatedRecords`, but uses Google Apps Script’s `TextFinder` to locate matches. This can be useful when the foreign key is stored in a way that exact numeric matching might fail, or if you have textual variations.
+- **Parameters**:
+  - `foreignKey` *(number)*  
+    The foreign key value to filter by. Must be a number, though it’s matched using TextFinder as a string.
+  - `tableName` *(string)*  
+    The table (sheet) to search in.
+  - `field` *(string)*  
+    The column header (in the “fields” object) that contains the foreign key.
+  - `fieldIndex` *(number)*  
+    The zero-based column index for the foreign key field.
+  - `options?` *(object)*  
+    - `page?: number`  
+    - `pageSize?: number`  
+    - `sortBy?: string`  
+    - `sortOrder?: 'asc' | 'desc'`
+  - `useCache?` *(boolean)*  
+    Whether to retrieve from an existing cache if available (default: `false`).
+- **Returns**:  
+  - On success: `{ status: 200, data: any[], message: string }`  
+  - On failure: `{ status: 500, error: string }`
+
+---
+
+## `applyColorScheme(tableName, colorScheme)`
 - **Description**: Applies a color scheme to a table for better visualization.
 - **Parameters**:
-  - `tableName` *(string)*: Name of the table.
-  - `colorScheme` *(string)*: Predefined color scheme (`red`, `blue`, `green`, `orange`, `purple`).
-- **Returns**: Nothing. Throws an error if the color scheme is invalid.
+  - `tableName` *(string)*  
+    The name of the table (sheet).
+  - `colorScheme` *(string)*  
+    One of: `red`, `blue`, `green`, `orange`, `purple`.
+- **Returns**: `void`  
+  (Throws an error if the color scheme is invalid.)
 
-### New: **Many-to-Many Relationship Methods**
+---
 
-#### `createManyToManyTableConfig(config)`
-Builds a config object for a **junction** (relation) table.
+## Many-to-Many Relationship Methods
 
+### `createManyToManyTableConfig(config)`
+- **Description**: Builds a config object for a **junction** (relation) table.
 - **Parameters**:
-  - `entity1TableName` *(string)*
-  - `entity2TableName` *(string)*
-  - `fieldsRelatedToBothEntities` *(Object, optional)*: Additional fields to store in the relationship.
-- **Returns**: `{ status, data: { tableName, historyTableName, fields }, message } | { status, error }`
+  - `config` *(Object)*  
+    - `entity1TableName` *(string)*  
+    - `entity2TableName` *(string)*  
+    - `fieldsRelatedToBothEntities?` *(Object)*  
+      Additional fields to store in the relationship, e.g. `{ quantity: "number" }`.
+- **Returns**:  
+  - On success: `{ status: 200, data: { tableName, historyTableName, fields }, message }`  
+  - On error: `{ status: 500, error }`
 
-#### `createJunctionRecord(junctionTableName, data, keyOrder)`
-Creates a new record in the junction table, preventing duplicate relationships.
-
+### `createJunctionRecord(junctionTableName, data, keyOrder)`
+- **Description**: Creates a new record in the junction table, preventing duplicate relationships.
 - **Parameters**:
-  - `junctionTableName` *(string)*
-  - `data` *(Object)*: Must contain the foreign keys (e.g. `tool_id`, `group_id`).
-  - `keyOrder` *(Array\<string\>)*: The order of these keys.
-- **Returns**: `{ status, id, action } | { status, error }`
+  - `junctionTableName` *(string)*  
+  - `data` *(Object)*  
+    Must contain the two foreign keys, e.g. `{ project_id, employee_id }`.
+  - `keyOrder` *(string[])*  
+    The field order in the sheet.
+- **Returns**: `{ status, id, action }` or `{ status, error }`.
 
-#### `getJunctionRecords(junctionTableName, sourceTableName, targetTableName, sourceId, options)`
-Fetches related records from a **many-to-many** relationship.
-
+### `getJunctionRecords(junctionTableName, sourceTableName, targetTableName, sourceId, options?)`
+- **Description**: Fetches related records from a **many-to-many** relationship.
 - **Parameters**:
-  - `junctionTableName` *(string)*
-  - `sourceTableName` *(string)*
-  - `targetTableName` *(string)*
-  - `sourceId` *(number)*
-  - `options` *(Object)*: Sorting & pagination options.
-- **Returns**: `{ status, data: [...], message, metadata } | { status, error }`
+  - `junctionTableName` *(string)*  
+    The junction table that links `sourceTableName` and `targetTableName`.
+  - `sourceTableName` *(string)*  
+    The "origin" table name.
+  - `targetTableName` *(string)*  
+    The "destination" table name to retrieve data from.
+  - `sourceId` *(number)*  
+    The ID in the source table.
+  - `options?` *(object)*  
+    Sorting & pagination options (`sortBy`, `sortOrder`, `page`, `pageSize`, etc.).
+- **Returns**: `{ status, data: any[], message, metadata }` or `{ status, error }`.
 
-#### `updateJunctionRecord(junctionTableName, id, data, keyOrder)`
-Updates a record in the junction table, also preventing duplicate relationships.
-
+### `updateJunctionRecord(junctionTableName, id, data, keyOrder)`
+- **Description**: Updates a record in the junction table, preventing duplicates for the same pair of foreign keys.
 - **Parameters**:
-  - `junctionTableName` *(string)*
-  - `id` *(number)*
-  - `data` *(Object)*
-  - `keyOrder` *(Array\<string\>)*
-- **Returns**: `{ status, id, data, action } | { status, error }`
+  - `junctionTableName` *(string)*  
+  - `id` *(number)*  
+  - `data` *(object)*  
+  - `keyOrder` *(string[])*  
+- **Returns**: `{ status, id, data, action }` or `{ status, error }`.
 
-#### `checkTableIntegrity(junctionTableName, junctionHistoryTableName)`
-Validates the foreign key references in a junction table; moves invalid rows to its history table.
+### `checkTableIntegrity(junctionTableName, junctionHistoryTableName)`
+- **Description**: Validates foreign key references in a junction table. Moves invalid rows (where parent records no longer exist) to the junction table's history.
+- **Returns**: `{ status, count, message }` or `{ status, error }`
 
-- **Returns**: `{ status, count, message } | { status, error }`
+---
 
-### **Locking Methods**
+## Locking Methods
 
-#### `releaseLocks()`
-Releases all active locks (both script-level and user-level) held by this `DB` instance.
-
+### `releaseLocks()`
+- **Description**: Frees all active locks (both script-level and user-level) held by the current `DB` instance.
+- **Returns**: `void`.
