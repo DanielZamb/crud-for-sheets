@@ -1,0 +1,64 @@
+---
+title: Home
+description: Welcome to the Google Apps Script CRUD Class for Google Sheets documentation.
+---
+
+# 📊 Google Apps Script CRUD for Google Sheets (GAS-DB)
+
+Welcome to the **Google Apps Script CRUD Class for Google Sheets**! This library simplifies managing your Google Sheets as databases, allowing you to perform **Create, Read, Update,** and **Delete** (CRUD) operations with ease. Whether you're building a CRM, inventory system, or any data-driven application, this library has got you covered! 🚀
+
+## 🌟 Features
+
+- **✨ CRUD Operations**: Seamlessly Create, Read, Update, and Delete records in Google Sheets.
+- **📜 History Tracking**: Automatically track deletions with history tables.
+- **🔍 Sorting & Pagination**: Easily sort and paginate your data for better management.
+- **✅ Type Validation**: Ensure data integrity with type checking (`number`, `string`, `boolean`, `date`).
+- **📦 _New_ Concurrency Locks**: Prevent race conditions with built-in locking mechanisms for writes and reads.
+- **🔗 _New_ Many-to-Many Relationship Support**: Handle complex data relationships using junction tables.
+- **⚡️ Caching**: Improve performance with built-in caching.
+- **🎨 Customizable Color Schemes**: Beautify your sheets with predefined color themes.
+- **🗃 _New_ Bulk Reading**: Fetch multiple records by ID in a single call.
+
+---
+
+## 📖 Quick Start
+
+1. **[Installation](/installation)**  
+   Learn how to add this library to your Google Apps Script project.
+2. **[Creating Tables](/create-tables)**  
+   Explore how to initialize, create tables, and put them into the schema context to then perform basic CRUD ops.
+3. **[Caveats](/caveats)**  
+   Important notes on date serialization, table headers, and more.
+4. **[CRUD Operations](/crud-operations)**  
+   A detailed guide on creating, reading, updating, and deleting records.
+5. **[Advanced Examples](/advanced-examples)**  
+   Dive deeper into bulk reading, many-to-many relationships, and more.
+6. **[API Reference](/api-reference)**  
+   A complete breakdown of all available methods, signatures, and return structures.
+7. **[Full Code Samples](/examples)**  
+   Copy-paste ready examples demonstrating end-to-end flows.
+
+---
+
+## 🚀 What’s New in v1.0.0
+
+1. **Concurrency Locks**  
+   Locking for Create/Update/Delete operations to prevent concurrent writes on the same record.
+2. **Many-to-Many Relationship Support**  
+   Easily create and manage junction tables between two different entities.
+3. **Cascade Deletion**  
+   Remove a parent record and automatically clean up related entries in junction tables.
+4. **Bulk Read**  
+   Fetch multiple records by ID with a single call.
+5. **Integrity Checks**  
+   Validate foreign key references in your junction tables.
+6. **Enhanced Logging & Debug**  
+   Methods like `createWithLogs()` and `updateWithLogs()` for more detailed output.
+
+---
+
+## Contributing
+
+We welcome contributions! Feel free to open issues or pull requests on our [GitHub repository](https://github.com/DanielZamb/crud-for-sheets/).
+
+If you have any questions or suggestions, reach out or file an issue. Thanks for using **GAS-DB**!

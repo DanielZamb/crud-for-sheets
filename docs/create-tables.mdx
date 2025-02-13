@@ -1,0 +1,124 @@
+---
+title: Creating Tables
+description: Learn how to initialize, create tables, and put them into the schema context for CRUD operations.
+---
+
+## 🚀 Initialization
+
+Initialize the database by creating a new instance of the `DB` class. You can either create a new spreadsheet or connect to an existing one using its ID.
+
+```js
+/**
+ * Initialize the database.
+ */
+
+// Declare db in your global scope in order to use it in any part of the script
+const db;
+const existingDb;
+
+function initializeDatabase() {
+  // Initialize a new spreadsheet database
+  db = DB.init('MyDatabase');
+
+  // OR connect to an existing spreadsheet using its ID
+  existingDb = DB.init('ExistingDatabase', 'YOUR_SPREADSHEET_ID');
+
+  // Log the creation result
+  console.log(db.getCreationResult());
+}
+```
+
+## 🛠️ Creating Tables
+
+Define and create tables within your spreadsheet. Each table represents a sheet with specified fields and types.
+
+```js
+/**
+ * Create tables in the database.
+ */
+let tables = []
+const db = DB.init('MyDatabase');
+const employeeTableConfig;
+const departmentTableConfig;
+
+function createTables() {
+
+  // Define configuration for the EMPLOYEES table
+  employeeTableConfig = {
+    tableName: "EMPLOYEES",
+    historyTableName: "DELETED_EMPLOYEES",
+    fields: {
+      name: "string",
+      age: "number",
+      position: "string",
+      employed: "boolean",
+      hire_date: "date",
+    }
+  };
+
+  // Create the EMPLOYEES table
+  const createResult = db.createTable(employeeTableConfig);
+  console.log("Employee table created:", createResult);
+
+  // Define configuration for the DEPARTMENTS table
+  departmentTableConfig = {
+    tableName: "DEPARTMENTS",
+    historyTableName: "DELETED_DEPARTMENTS",
+    fields: {
+      department_name: "string",
+      manager_id: "number",
+      location: "string",
+    }
+  };
+
+  // Create the DEPARTMENTS table
+  const deptCreateResult = db.createTable(departmentTableConfig);
+  console.log("Departments table created:", deptCreateResult);
+
+  tables.push(employeeTableConfig);
+  tables.push(departmentTableConfig);
+}
+```
+
+After creation, remember that you **must** place them into the DB Context, otherwise they wont be available to operate with. 
+I Recomend doing this as separate declarations, if there are few tables.
+If there's a hefty amount of tables, you can loop through them and place them into the context.
+
+
+```js
+tables.forEach((table) => {
+  console.log(db.putTableIntoDbContext(table));
+});
+```
+
+## Key Points
+
+1. **You leave the code for putting tables in the schema context** outside of any function, in the global scope, as `.gs` files are stateless, and will be called in a `clean slate` state each and every time any `google.script.run` is called in your `main.js`.
+2. **You have the tables defined** in the global scope, so you can access them from anywhere in your script.
+3. **You have the DB instance** defined in the global scope, so you can access it from anywhere in your script (either by copying the script or adding the library).
+4. **You actually did placed the tables into the context** before using them in your CRUD operations.
+
+
+
+You can continue adding more **basic** usage instructions here (e.g., how to handle data, read records, etc.).
+For _advanced usage_, see [docs/advanced-examples](/advanced-examples).
+
+
+## 🎨 Applying Color Schemes
+
+Enhance the visual appeal of your sheets by applying predefined color themes.
+
+```javascript
+const db = DB.init('MyDatabase');
+
+/**
+ * Apply a color scheme to the EMPLOYEES table.
+ */
+function applyColorScheme() {
+
+  // Apply the 'blue' color scheme
+  db.applyColorScheme('EMPLOYEES', 'blue');
+  
+  console.log('Color scheme applied to EMPLOYEES table.');
+}
+```

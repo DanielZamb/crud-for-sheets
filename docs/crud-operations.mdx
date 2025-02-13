@@ -1,0 +1,218 @@
+---
+title: CRUD Operations
+description: Learn how to perform CRUD operations on your tables.
+---
+
+
+## ☝️🤓 Acktually... There is 2 ways to do CRUD
+
+if you decide to create the Tables from the library, then you can use the tableConfig objects for the CRUD operations.
+
+like this
+
+### 1. With tableConfig objects
+```javascript
+db.create(tableConfig.tableName,
+          newRecord,
+          Object.keys(tableConfig.fields))
+```
+if you setup the sheets yourself you can also use the CRUD operations like this
+
+### 2. With const
+
+```javascript
+const tableName = "YOUR_TABLE_NAME";
+const historyTableName = "DELETED_YOUR_TABLE_NAME";
+const keyOrder = ["key1","key2", ...,"keyn"];
+
+db.create(tableName,
+          newRecord,
+          keyOrder)
+```
+
+but for the love of Linus Torvalds, *PUT THEM IN THE DB CONTEXT* (or as the message would say _schema_ 🧏‍♂️)
+
+so it would go like so 
+
+```javascript
+//call create tables to create the sheets
+createTables();
+//call the function that puts table into context
+putTablesInSchema();
+
+function putTablesInSchema(){
+  tables.forEach( table => {
+    console.log(db.putTableIntoDbContext(table))
+  })
+}
+```
+When the tables are in the DB schema, the library will recognize any CRUD operations whether you do it like (1) or (2)
+
+
+## ➕ Creating Records
+
+Insert new records into your tables. You can also define policies to update existing records based on specific conditions.
+
+Supposing you already have initialized the DB and have some records:
+```javascript
+const db = DB.init('MyDatabase');
+
+const employees = [
+  {
+    name: 'John Doe',
+    age: 30,
+    position: 'Software Engineer',
+    employed: true,
+    hire_date: new Date('2022-01-15')
+  },
+  {
+    name: 'Jane Smith',
+    age: 28,
+    position: 'Product Manager',
+    employed: true,
+    hire_date: new Date('2021-11-05')
+  },
+];
+```
+
+1. First define a Wrapper Function
+```javascript
+function addEmployees(newEmployees) {
+    // Method 1
+   const result = db.create(employeeTableConfig.tableName,
+                            newEmployees,
+                            Object.keys(employeeTableConfig.fields));
+   // Method 2
+   const result = db.create('EMPLOYEES',
+                           newEmployees,
+                           ['name', 'age', 'position', 'employed', 'hire_date']);  
+   console.log('Create Result:', result);
+   return JSON.stringify(response)
+}
+```
+2. Call the function when needed
+```javascript
+google.script.run
+            .withFailureHandler((err)=>{console.log(err.message}
+            .withSuccessHandler((response) => {
+               response = JSON.parse(response)
+               console.log(response)
+            }).addEmployees(employees)   
+```
+
+## 🔍 Reading Records
+
+Retrieve specific records or all records from a table. Supports sorting and pagination for efficient data handling.
+(If you dont want to use cache, dont forget to turn it off).
+
+```javascript
+/**
+ * Read all employees from the EMPLOYEES table.
+ */
+function readEmployees() {
+  // Retrieve all employees, sorted by hire_date in descending order, 10 per page
+  const employees = db.getAll('EMPLOYEES', { 
+    page: 1, 
+    pageSize: 10, 
+    sortBy: 'hire_date', 
+    sortOrder: 'desc' 
+  }, false); // `false` to bypass cache
+
+  // method 1
+  const employees = db.getAll(employeeTableConfig.tableName, 
+                              options={ 
+                                page: 1, 
+                                pageSize: 10, 
+                                sortBy: 'hire_date', 
+                                sortOrder: 'desc' 
+                              },
+                              useCache=false); // `false` to bypass cache
+
+  console.log('Employees:', employees.data);
+  return JSON.stringify(response);
+}
+```
+
+## ✏️ Updating Records
+
+Modify existing records in your tables based on their unique ID.
+
+Supose you have and updated employee record:
+
+```javascript
+const updatedEmployee = {
+  name: 'John Doe',
+  age: 31, // Updated age
+  position: 'Senior Software Engineer', // Updated position
+  employed: true,
+  hire_date: new Date('2022-01-15')
+};
+```
+1. (Again) Define the wrapper function for the update
+```javascript
+/**
+ * Update an employee's information.
+ */
+function updateEmployee(updatedEmployee) {
+   //Method 1
+  const updateResult = db.update(employeeTableConfig.tableName, updatedEmployee.id, updatedEmployee, Object.keys(employeeTableConfig.fields));
+  console.log('Update Result:', updateResult);
+
+   // Method 2
+  const updateResult = db.update('EMPLOYEES', updatedEmployee.id, updatedEmployee, ['name', 'age', 'position', 'employed', 'hire_date']);
+
+  return JSON.stringify(updateResult);
+}
+```
+
+2. Call it when the function's needed
+```javascript
+google.script.run
+            .withFailureHandler((err)=>{console.log(err.message}
+            .withSuccessHandler((response) => {
+               response = JSON.parse(response)
+               console.log(response)
+            }).updateEmployee(updatedEmployee)   
+```
+
+## 🗑️ Deleting Records
+
+Remove records from your tables. Deleted records are *moved* to a history table for tracking purposes.
+
+1. You know the drill
+```javascript
+/**
+ * Delete an employee from the EMPLOYEES table.
+ */
+function deleteEmployee(id) {
+  // Delete employee with ID 1 and move to DELETED_EMPLOYEES history table
+  const deleteResult = db.remove('EMPLOYEES', 'DELETED_EMPLOYEES', id);
+
+  //method 1
+  const deleteResult = db.remove(employeeTableConfig.tableName, employeeTableConfig.historyTablename, id);
+  console.log('Delete Result:', deleteResult);
+
+  return JSON.stringify(deleteResult);
+}
+```
+
+## **New**: 🗑️ Cascade Deletion
+
+If you have many-to-many relationships, you might want to -in order to keep consistency- use:
+```javascript
+function deleteEmployeeCascade(id) {
+  // removes the employee and the related records from the junction tables
+  const deleteResult = db.removeWithCascade('EMPLOYEES', 'DELETED_EMPLOYEES', id);
+  return JSON.stringify(deleteResult);
+}
+```
+
+2. Call it when needed
+```javascript
+google.script.run
+            .withFailureHandler((err)=>{console.log(err.message}
+            .withSuccessHandler((response) => {
+               response = JSON.parse(response)
+               console.log(response)
+            }).deleteEmployee(4)
+```

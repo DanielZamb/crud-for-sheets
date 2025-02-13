@@ -1,0 +1,56 @@
+{
+  "name": "GAS-DB",
+  "description": "Docs for the crud-for-sheets.js project!",
+  "sidebar": [
+  {
+    "group": "Getting Started",
+    "pages": [
+      {
+        "title": "Home",
+        "href": "/",
+        "icon": "rocket"
+      },
+      {
+        "title": "Installation",
+        "href": "/installation",
+        "icon": "download"
+      },
+      {
+        "title": "Creating Tables",
+        "href": "/create-tables",
+        "icon": "table"
+      },
+      {
+        "title": "Caveats",
+        "href": "/caveats",
+        "icon": "triangle-exclamation"
+      },
+      {
+        "title": "CRUD Operations",
+        "href": "/crud-operations",
+        "icon": "database"
+      },
+      {
+        "title": "Advanced Examples",
+        "href": "/advanced-examples",
+        "icon": "flask"
+      },
+      {
+        "title": "API Reference",
+        "href": "/api-reference",
+        "icon": "book"
+      },
+      {
+        "title": "Full Code Example",
+        "href": "/full-code-example",
+        "icon": "code"
+      },
+      {
+        "title": "Next Steps",
+        "href": "/next-steps",
+        "icon": "arrow-right"
+      }
+    ]
+    }
+  ]
+}
