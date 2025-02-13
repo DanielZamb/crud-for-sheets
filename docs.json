@@ -28,7 +28,12 @@
       {
         "title": "Caveats",
         "href": "/caveats",
-        "icon": "alert"
+        "icon": "triangle-exclamation"
+      },
+      {
+        "title": "CRUD Operations",
+        "href": "/crud-operations",
+        "icon": "database"
       },
       {
         "title": "Advanced Examples",
