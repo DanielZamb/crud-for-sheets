@@ -49,7 +49,7 @@ function putTablesInSchema(){
 When the tables are in the DB schema, the library will recognize any CRUD operations whether you do it like (1) or (2)
 
 
-### ➕ Creating Records
+## ➕ Creating Records
 
 Insert new records into your tables. You can also define policies to update existing records based on specific conditions.
 
@@ -100,7 +100,7 @@ google.script.run
             }).addEmployees(employees)   
 ```
 
-### 🔍 Reading Records
+## 🔍 Reading Records
 
 Retrieve specific records or all records from a table. Supports sorting and pagination for efficient data handling.
 (If you dont want to use cache, dont forget to turn it off).
@@ -133,7 +133,7 @@ function readEmployees() {
 }
 ```
 
-### ✏️ Updating Records
+## ✏️ Updating Records
 
 Modify existing records in your tables based on their unique ID.
 
@@ -175,7 +175,7 @@ google.script.run
             }).updateEmployee(updatedEmployee)   
 ```
 
-### 🗑️ Deleting Records
+## 🗑️ Deleting Records
 
 Remove records from your tables. Deleted records are *moved* to a history table for tracking purposes.
 
@@ -196,7 +196,7 @@ function deleteEmployee(id) {
 }
 ```
 
-### **New**: 🗑️ Cascade Deletion
+## **New**: 🗑️ Cascade Deletion
 
 If you have many-to-many relationships, you might want to -in order to keep consistency- use:
 ```javascript
