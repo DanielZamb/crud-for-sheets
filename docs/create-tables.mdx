@@ -102,3 +102,23 @@ tables.forEach((table) => {
 
 You can continue adding more **basic** usage instructions here (e.g., how to handle data, read records, etc.).
 For _advanced usage_, see [docs/advanced-examples](/advanced-examples).
+
+
+## 🎨 Applying Color Schemes
+
+Enhance the visual appeal of your sheets by applying predefined color themes.
+
+```javascript
+const db = DB.init('MyDatabase');
+
+/**
+ * Apply a color scheme to the EMPLOYEES table.
+ */
+function applyColorScheme() {
+
+  // Apply the 'blue' color scheme
+  db.applyColorScheme('EMPLOYEES', 'blue');
+  
+  console.log('Color scheme applied to EMPLOYEES table.');
+}
+```

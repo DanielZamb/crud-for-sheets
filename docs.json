@@ -11,11 +11,6 @@
         "icon": "rocket"
       },
       {
-        "title": "Next Steps",
-        "href": "/next-steps",
-        "icon": "arrow-right"
-      },
-      {
         "title": "Installation",
         "href": "/installation",
         "icon": "download"
@@ -39,6 +34,21 @@
         "title": "Advanced Examples",
         "href": "/advanced-examples",
         "icon": "flask"
+      },
+      {
+        "title": "API Reference",
+        "href": "/api-reference",
+        "icon": "book"
+      },
+      {
+        "title": "Full Code Example",
+        "href": "/full-code-example",
+        "icon": "code"
+      },
+      {
+        "title": "Next Steps",
+        "href": "/next-steps",
+        "icon": "arrow-right"
       }
     ]
     }

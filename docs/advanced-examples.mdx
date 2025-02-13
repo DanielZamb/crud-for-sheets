@@ -1,0 +1,109 @@
+---
+title: Advanced Examples
+description: Dive deeper into bulk reading, many-to-many relationships, and more.
+---
+
+
+## 📈 Fetching with Pagination and Sorting
+
+Retrieve data with advanced options like pagination and sorting to handle large datasets efficiently.
+
+```javascript
+const db = DB.init('MyDatabase');
+
+/**
+ * Fetch paginated and sorted employee data.
+ */
+
+function fetchPaginatedEmployees() {
+
+  const options = {
+    page: 2,          // Page number
+    pageSize: 5,      // Number of records per page
+    sortBy: 'age',    // Field to sort by
+    sortOrder: 'asc'  // Sort order: 'asc' or 'desc'
+  };
+
+  const result = db.getAll('EMPLOYEES', options, true); // `true` to use cache
+  console.log(result.data);
+}
+```
+
+## 🛡️ Handling Type Validation
+
+Ensures data integrity by validating the types of incoming data before performing operations.
+
+```javascript
+const db = DB.init('MyDatabase');
+
+/**
+ * Add an employee with type validation.
+ */
+function addEmployeeWithValidation() {
+
+  const employee = {
+    name: 'Alice Johnson',
+    age: 'Thirty', // Incorrect type: should be a number
+    position: 'Designer',
+    employed: true,
+    hire_date: new Date('2023-03-10')
+  };
+
+  // this will err
+  const result = db.create('EMPLOYEES', employee, ['name', 'age', 'position', 'employed', 'hire_date']);
+  
+  if (result.status === 500) {
+    console.error('Failed to create employee:', result.error);
+  } else {
+    console.log('Employee created:', result);
+  }
+}
+```
+
+## 🔗 Many-to-Many Relationships
+
+Create junction tables for many-to-many relationships, e.g., `PROJECTS` to `EMPLOYEES`:
+
+```javascript
+// 1. Create the relation config
+const relationConfig = db.createManyToManyTableConfig({
+  entity1TableName: "PROJECTS",
+  entity2TableName: "EMPLOYEES",
+  fieldsRelatedToBothEntities: {
+    extra_field: "string" // optional
+  }
+});
+
+/*
+ relationConfig.data is an object just like: 
+ {
+   tableName: "PROJECTS_EMPLOYEES_RELATION",
+   historyTableName: "DELETED_PROJECTS_EMPLOYEES_RELATION",
+   fields: { created_at: "date", projects_id: "number", employees_id: "number", ...}
+ }
+*/
+
+// 2. Create that table 
+db.createTable(relationConfig.data);
+db.putTableIntoDbContext(relationConfig.data);
+
+// 3. Insert a record in the junction table
+db.createJunctionRecord("PROJECTS_EMPLOYEES_RELATION", {
+  projects_id: 10,
+  employees_id: 5
+}, ["projects_id", "employees_id"]); 
+```
+
+## 🔎 Bulk Reading by IDs
+
+Read multiple records in one go:
+
+```javascript
+function readManyEmployees() {
+  // pass an array of IDs
+  const result = db.readIdList("EMPLOYEES", [1,2,3,100]);
+  console.log(result.data);       // found records
+  console.log(result.notFound);   // array of IDs not found
+  return JSON.stringify(result);
+}
+```
