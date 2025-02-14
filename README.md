@@ -1,3 +1,6 @@
+# Attention!!
+
+Please refer to the Official Docs [here](https://docs.page/DanielZamb/crud-for-sheets~docs-testing) as they are being constantly updated. In the future this readme will only conatain **instalation** and **new features summary**.
 
 # 📊 Google Apps Script CRUD Class for Google Sheets (v1.0.0)
 
