@@ -13,20 +13,31 @@ Initialize the database by creating a new instance of the `DB` class. You can ei
  */
 
 // Declare db in your global scope in order to use it in any part of the script
-const db;
-const existingDb;
+const db = DB.init('MyDatabase');
+// OR connect to an existing spreadsheet using its ID
+const existingDb = DB.init('ExistingDatabase', 'YOUR_SPREADSHEET_ID');
 
-function initializeDatabase() {
-  // Initialize a new spreadsheet database
-  db = DB.init('MyDatabase');
-
-  // OR connect to an existing spreadsheet using its ID
-  existingDb = DB.init('ExistingDatabase', 'YOUR_SPREADSHEET_ID');
-
+function seeSchemaCreation() {
   // Log the creation result
   console.log(db.getCreationResult());
 }
 ```
+> Note that the `seeSchemaCreation()` is just a helper function to see the result of the schema creation. You can remove it after you see the result in the console.
+> If you dont want to see the result, you can remove the function, but you must have at least one or more functions in your `code.gs` file, otherwise the script will not run.
+
+When you hit Run on the `seeSchemaCreation` function **for the first time**, you will see an Oauth consent screen, asking for permissions to access your Google Sheets. This is because the library needs to create a new spreadsheet/handle any spreadsheets you store in the database schema.
+
+After you grant the permissions, this screen may appear
+
+![warning-oauth](assets/warning-Oauth.png)
+
+As the library is not verified by Google, you will need to click on `Advanced` and then `Go to <Your Project Name> (unsafe)` to proceed.
+
+![warning-oauth-2](assets/click-advanced.png)
+
+As the code is open-source, you can review it before proceeding and reassure yourself that it is safe to use.
+
+After that the script will run, and you will see a new spreadsheet created in your Google Drive with the name `MyDatabase` (or now you can manage `ExistingDatabase` if you provided an ID).
 
 ## 🛠️ Creating Tables
 
