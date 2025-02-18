@@ -28,6 +28,38 @@ This page lists all public methods available in the **Google Apps Script CRUD Cl
 
 ---
 
+Here is the API reference documentation for your function:  
+
+---
+
+## `putTableIntoDbContext`
+
+- **Description**: Adds a table to the database context by storing its schema definition. If the table is already present in the context, an error is returned.
+- **Parameters**:
+  - `config` **(Object)**  
+      Table configuration object containing:
+    - `config.tableName` **(string)** 
+      The name of the table to be added.
+    - `config.fields` **(Object)** 
+      An object defining the fields of the table.
+
+- **Returns**:
+  **(Object)** – Status of the operation:
+  - If the table is successfully added:
+    ```json
+    {
+      "status": 200,
+      "message": "Table added to the schema"
+    }
+    ```
+  - If the table is already present in the database context:
+    ```json
+    {
+      "status": 500,
+      "error": "Error when trying to put table in context of the database: Already in context"
+    }
+    ```
+
 ## `create(tableName, data, keyOrder, addUpdatePolicy?)`
 - **Description**: Inserts a new record or updates an existing one based on an optional policy.
 - **Parameters**:
