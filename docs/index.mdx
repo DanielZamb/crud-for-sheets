@@ -15,6 +15,7 @@ Welcome to the **Google Apps Script CRUD Class for Google Sheets**! This library
 - **✅ Type Validation**: Ensure data integrity with type checking (`number`, `string`, `boolean`, `date`).
 - **📦 _New_ Concurrency Locks**: Prevent race conditions with built-in locking mechanisms for writes and reads.
 - **🔗 _New_ Many-to-Many Relationship Support**: Handle complex data relationships using junction tables.
+- **✨ _New_ Schema Defaults & Missing-Value Flags**: Define `{ type, default }` per field (supports `default: "now"` for dates) and control missing detection via `treatNullAsMissing` and `treatEmptyStringAsMissing`.
 - **⚡️ Caching**: Improve performance with built-in caching.
 - **🎨 Customizable Color Schemes**: Beautify your sheets with predefined color themes.
 - **🗃 _New_ Bulk Reading**: Fetch multiple records by ID in a single call.
@@ -33,18 +34,20 @@ Welcome to the **Google Apps Script CRUD Class for Google Sheets**! This library
    A detailed guide on creating, reading, updating, and deleting records.
 5. **[Advanced Examples](/advanced-examples)**  
    Dive deeper into bulk reading, many-to-many relationships, and more.
-6. **[API Reference](/api-reference)**  
+6. **[Test Suite](/test-suite)**  
+   See the QUnit-based test suite and how to run or replicate it.
+7. **[API Reference](/api-reference)**  
    A complete breakdown of all available methods, signatures, and return structures.
-7. **[Full Code Samples](/examples)**  
-   Copy-paste ready examples demonstrating end-to-end flows.
-8. **[Got Ideas?](/got-ideas)**  
+8. **[Full Code Example](/full-code-example)**  
+   Copy-paste ready example demonstrating end-to-end flows.
+9. **[Got Ideas?](/got-ideas)**  
    Have a feature request or idea? Learn how to suggest new features and improvements.
-9. **[Contributing](/contribute)**
-   Interested in contributing? Check out our guidelines for reporting issues, submitting pull requests, and improving documentation.
+10. **[Contributing](/contribute)**
+    Interested in contributing? Check out our guidelines for reporting issues, submitting pull requests, and improving documentation.
 
 ---
 
-## 🚀 What’s New in v1.0.0
+## 🚀 What’s New in v1.1.0
 
 1. **Concurrency Locks**  
    Locking for Create/Update/Delete operations to prevent concurrent writes on the same record.
@@ -58,6 +61,8 @@ Welcome to the **Google Apps Script CRUD Class for Google Sheets**! This library
    Validate foreign key references in your junction tables.
 6. **Enhanced Logging & Debug**  
    Methods like `createWithLogs()` and `updateWithLogs()` for more detailed output.
+7. **Schema Defaults & Missing-Value Flags**  
+   Apply defaults automatically (including `now` for dates) and control when `null`/`""` are treated as missing.
 
 ---
 

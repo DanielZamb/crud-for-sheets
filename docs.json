@@ -36,6 +36,11 @@
         "icon": "flask"
       },
       {
+        "title": "Test Suite",
+        "href": "/test-suite",
+        "icon": "beaker"
+      },
+      {
         "title": "API Reference",
         "href": "/api-reference",
         "icon": "book"

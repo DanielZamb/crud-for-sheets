@@ -13,15 +13,16 @@ Initialize the database by creating a new instance of the `DB` class. You can ei
  */
 
 // Declare db in your global scope in order to use it in any part of the script
-const db = DB.init('MyDatabase');
+const db = DB.init("MyDatabase");
 // OR connect to an existing spreadsheet using its ID
-const existingDb = DB.init('ExistingDatabase', 'YOUR_SPREADSHEET_ID');
+const existingDb = DB.init("ExistingDatabase", "YOUR_SPREADSHEET_ID");
 
 function seeSchemaCreation() {
   // Log the creation result
   console.log(db.getCreationResult());
 }
 ```
+
 > Note that the `seeSchemaCreation()` is just a helper function to see the result of the schema creation. You can remove it after you see the result in the console.
 > If you dont want to see the result, you can remove the function, but you must have at least one or more functions in your `code.gs` file, otherwise the script will not run.
 
@@ -59,11 +60,11 @@ function createTables() {
     tableName: "EMPLOYEES",
     historyTableName: "DELETED_EMPLOYEES",
     fields: {
-      name: "string",
+      name: { type: "string", treatEmptyStringAsMissing: true },
       age: "number",
       position: "string",
-      employed: "boolean",
-      hire_date: "date",
+      employed: { type: "boolean", default: true },
+      hire_date: { type: "date", default: "now" },
     }
   };
 
@@ -91,10 +92,9 @@ function createTables() {
 }
 ```
 
-After creation, remember that you **must** place them into the DB Context, otherwise they wont be available to operate with. 
+After creation, remember that you **must** place them into the DB Context, otherwise they wont be available to operate with.
 I Recomend doing this as separate declarations, if there are few tables.
 If there's a hefty amount of tables, you can loop through them and place them into the context.
-
 
 ```js
 tables.forEach((table) => {
@@ -109,27 +109,63 @@ tables.forEach((table) => {
 3. **You have the DB instance** defined in the global scope, so you can access it from anywhere in your script (either by copying the script or adding the library).
 4. **You actually did placed the tables into the context** before using them in your CRUD operations.
 
+## ✨ Schema Defaults and Missing-Value Flags
 
+You can define defaults in your schema so the DB fills values automatically when they are not provided (or considered missing), and you can control what counts as “missing”.
+
+- Define defaults using an object form `{ type, default?, treatNullAsMissing?, treatEmptyStringAsMissing? }` for each field.
+- Special default value `"now"` auto-fills the current date/time for `date` fields.
+- If a field has a default, it is not required in `keyOrder`.
+- Defaults are applied before validation and type checking.
+
+Example:
+
+```javascript
+const employeeTableConfig = {
+  tableName: "EMPLOYEES",
+  fields: {
+    name: { type: "string", treatEmptyStringAsMissing: true },
+    age: "number",
+    position: "string",
+    employed: { type: "boolean", default: true },
+    hire_date: { type: "date", default: "now" },
+  },
+};
+
+db.createTable(employeeTableConfig);
+db.putTableIntoDbContext(employeeTableConfig);
+
+// This works even if you omit employed and hire_date:
+db.create("EMPLOYEES", { name: "Eve", age: 27, position: "Analyst" }, [
+  "name",
+  "age",
+  "position",
+  // employed and hire_date are optional here due to defaults
+]);
+```
+
+Missing-value flags behavior:
+
+- `treatNullAsMissing: true` → `null` will be replaced by the default (if present)
+- `treatEmptyStringAsMissing: true` → `""` will be replaced by the default (if present)
 
 You can continue adding more **basic** usage instructions here (e.g., how to handle data, read records, etc.).
 For _advanced usage_, see [docs/advanced-examples](/advanced-examples).
-
 
 ## 🎨 Applying Color Schemes
 
 Enhance the visual appeal of your sheets by applying predefined color themes.
 
 ```javascript
-const db = DB.init('MyDatabase');
+const db = DB.init("MyDatabase");
 
 /**
  * Apply a color scheme to the EMPLOYEES table.
  */
 function applyColorScheme() {
-
   // Apply the 'blue' color scheme
-  db.applyColorScheme('EMPLOYEES', 'blue');
-  
-  console.log('Color scheme applied to EMPLOYEES table.');
+  db.applyColorScheme("EMPLOYEES", "blue");
+
+  console.log("Color scheme applied to EMPLOYEES table.");
 }
 ```

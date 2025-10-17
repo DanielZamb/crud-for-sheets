@@ -3,28 +3,26 @@ title: Advanced Examples
 description: Dive deeper into bulk reading, many-to-many relationships, and more.
 ---
 
-
 ## 📈 Fetching with Pagination and Sorting
 
 Retrieve data with advanced options like pagination and sorting to handle large datasets efficiently.
 
 ```javascript
-const db = DB.init('MyDatabase');
+const db = DB.init("MyDatabase");
 
 /**
  * Fetch paginated and sorted employee data.
  */
 
 function fetchPaginatedEmployees() {
-
   const options = {
-    page: 2,          // Page number
-    pageSize: 5,      // Number of records per page
-    sortBy: 'age',    // Field to sort by
-    sortOrder: 'asc'  // Sort order: 'asc' or 'desc'
+    page: 2, // Page number
+    pageSize: 5, // Number of records per page
+    sortBy: "age", // Field to sort by
+    sortOrder: "asc", // Sort order: 'asc' or 'desc'
   };
 
-  const result = db.getAll('EMPLOYEES', options, true); // `true` to use cache
+  const result = db.getAll("EMPLOYEES", options, true); // `true` to use cache
   console.log(result.data);
 }
 ```
@@ -34,28 +32,33 @@ function fetchPaginatedEmployees() {
 Ensures data integrity by validating the types of incoming data before performing operations.
 
 ```javascript
-const db = DB.init('MyDatabase');
+const db = DB.init("MyDatabase");
 
 /**
  * Add an employee with type validation.
  */
 function addEmployeeWithValidation() {
-
   const employee = {
-    name: 'Alice Johnson',
-    age: 'Thirty', // Incorrect type: should be a number
-    position: 'Designer',
+    name: "Alice Johnson",
+    age: "Thirty", // Incorrect type: should be a number
+    position: "Designer",
     employed: true,
-    hire_date: new Date('2023-03-10')
+    hire_date: new Date("2023-03-10"),
   };
 
   // this will err
-  const result = db.create('EMPLOYEES', employee, ['name', 'age', 'position', 'employed', 'hire_date']);
-  
+  const result = db.create("EMPLOYEES", employee, [
+    "name",
+    "age",
+    "position",
+    "employed",
+    "hire_date",
+  ]);
+
   if (result.status === 500) {
-    console.error('Failed to create employee:', result.error);
+    console.error("Failed to create employee:", result.error);
   } else {
-    console.log('Employee created:', result);
+    console.log("Employee created:", result);
   }
 }
 ```
@@ -70,8 +73,8 @@ const relationConfig = db.createManyToManyTableConfig({
   entity1TableName: "PROJECTS",
   entity2TableName: "EMPLOYEES",
   fieldsRelatedToBothEntities: {
-    extra_field: "string" // optional
-  }
+    extra_field: "string", // optional
+  },
 });
 
 /*
@@ -83,15 +86,19 @@ const relationConfig = db.createManyToManyTableConfig({
  }
 */
 
-// 2. Create that table 
+// 2. Create that table
 db.createTable(relationConfig.data);
 db.putTableIntoDbContext(relationConfig.data);
 
 // 3. Insert a record in the junction table
-db.createJunctionRecord("PROJECTS_EMPLOYEES_RELATION", {
-  projects_id: 10,
-  employees_id: 5
-}, ["projects_id", "employees_id"]); 
+db.createJunctionRecord(
+  "PROJECTS_EMPLOYEES_RELATION",
+  {
+    projects_id: 10,
+    employees_id: 5,
+  },
+  ["projects_id", "employees_id"]
+);
 ```
 
 ## 🔎 Bulk Reading by IDs
@@ -101,9 +108,47 @@ Read multiple records in one go:
 ```javascript
 function readManyEmployees() {
   // pass an array of IDs
-  const result = db.readIdList("EMPLOYEES", [1,2,3,100]);
-  console.log(result.data);       // found records
-  console.log(result.notFound);   // array of IDs not found
+  const result = db.readIdList("EMPLOYEES", [1, 2, 3, 100]);
+  console.log(result.data); // found records
+  console.log(result.notFound); // array of IDs not found
   return JSON.stringify(result);
 }
+```
+
+## ✨ Using Schema Defaults and Missing-Value Flags
+
+Define fields with defaults and flags, then create/update without specifying those values.
+
+```javascript
+const db = DB.init("MyDatabase");
+
+const productTableConfig = {
+  tableName: "PRODUCTS",
+  historyTableName: "DELETED_PRODUCTS",
+  fields: {
+    name: { type: "string", treatEmptyStringAsMissing: true },
+    price: "number",
+    active: { type: "boolean", default: true },
+    created_at: { type: "date", default: "now" },
+  },
+};
+
+db.createTable(productTableConfig);
+db.putTableIntoDbContext(productTableConfig);
+
+// Defaults in action (active defaults to true, created_at defaults to now)
+const resA = db.create("PRODUCTS", { name: "Widget", price: 9.99 }, [
+  "name",
+  "price",
+]);
+
+// Empty string treated as missing; will be replaced by default true
+const resB = db.update(
+  "PRODUCTS",
+  resA.id,
+  { name: "", price: 9.99, active: "" },
+  ["name", "price", "active"]
+);
+
+console.log(resA, resB);
 ```
