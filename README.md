@@ -58,12 +58,6 @@ Welcome to the **Google Apps Script CRUD Class for Google Sheets**! This library
 
 ## 📦 Installation
 
-**Copy the class found in CrudForSheets.js**
-
-_( i have yet to find out how to share a library publicly, when i do follow the steps bellow)_
-
----
-
 1. **Open Google Apps Script Editor**:
 
    - Go to your Google Sheets.
