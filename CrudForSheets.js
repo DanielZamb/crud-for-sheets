@@ -97,6 +97,59 @@ class DB {
     }
   }
 
+  /**
+   * Sanitizes cell values to prevent CSV injection attacks (CVE-2023-XXXXX)
+   * Prevents formula injection by escaping dangerous characters
+   * @param {*} value - The value to sanitize
+   * @returns {*} Sanitized value safe for spreadsheet insertion
+   * @private
+   */
+  _sanitizeForCSV(value) {
+    // Only sanitize string values
+    if (typeof value !== "string") {
+      return value;
+    }
+
+    // Empty strings are safe
+    if (value.length === 0) {
+      return value;
+    }
+
+    // Check if the string starts with dangerous characters
+    // These can trigger formula execution in spreadsheet applications:
+    // = (formula), + (formula), - (formula), @ (formula),
+    // \t (tab), \r (carriage return)
+    const dangerousChars = ["=", "+", "-", "@", "\t", "\r"];
+    const firstChar = value.charAt(0);
+
+    if (dangerousChars.includes(firstChar)) {
+      // Prepend with double quote to prevent formula execution
+      // This makes the cell text-only in Google Sheets/Excel
+      return "''" + value;
+    }
+
+    // Also check for pipe character followed by potentially dangerous patterns
+    // This prevents DDE attacks: =cmd|'/c calc'!A1
+    if (
+      value.includes("|") &&
+      (value.includes("cmd") || value.includes("powershell"))
+    ) {
+      return "''" + value;
+    }
+
+    return value;
+  }
+
+  /**
+   * Sanitizes an entire row of values before writing to sheet
+   * @param {Array} row - Array of values to sanitize
+   * @returns {Array} Sanitized row
+   * @private
+   */
+  _sanitizeRow(row) {
+    return row.map((value) => this._sanitizeForCSV(value));
+  }
+
   getCreationResult() {
     return this.creationResult;
   }
@@ -134,8 +187,14 @@ class DB {
         ...Object.keys(fields).map((field) => field.toUpperCase()),
       ];
 
-      mainTable.getRange(1, 1, 1, headers.length).setValues([headers]);
-      historyTable.getRange(1, 1, 1, headers.length).setValues([headers]);
+      // Sanitize headers to prevent CSV injection
+      const sanitizedHeaders = this._sanitizeRow(headers);
+      mainTable
+        .getRange(1, 1, 1, sanitizedHeaders.length)
+        .setValues([sanitizedHeaders]);
+      historyTable
+        .getRange(1, 1, 1, sanitizedHeaders.length)
+        .setValues([sanitizedHeaders]);
 
       this.tables[tableName] = this._normalizeSchemaFields(fields);
       return {
@@ -365,7 +424,9 @@ class DB {
             return value;
           }),
         ];
-        sheet.appendRow(row);
+        // Sanitize row to prevent CSV injection
+        const sanitizedRow = this._sanitizeRow(row);
+        sheet.appendRow(sanitizedRow);
 
         this._clearCache(tableName);
         return {
@@ -797,7 +858,9 @@ class DB {
         ];
 
         console.log("[CREATE] Final row data to append:", row);
-        sheet.appendRow(row);
+        // Sanitize row to prevent CSV injection
+        const sanitizedRow = this._sanitizeRow(row);
+        sheet.appendRow(sanitizedRow);
 
         const dataView = sheet
           .getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn())
@@ -941,9 +1004,11 @@ class DB {
             return value;
           }),
         ];
+        // Sanitize row to prevent CSV injection
+        const sanitizedRow = this._sanitizeRow(updatedRow);
         sheet
-          .getRange(rowIndex, 1, 1, updatedRow.length)
-          .setValues([updatedRow]);
+          .getRange(rowIndex, 1, 1, sanitizedRow.length)
+          .setValues([sanitizedRow]);
 
         this._clearCache(tableName);
         console.log(updatedRow);
@@ -1078,14 +1143,16 @@ class DB {
       console.log("Final row data to write:", updatedRow);
 
       // Update the sheet
-      const range = sheet.getRange(rowIndex, 1, 1, updatedRow.length);
+      // Sanitize row to prevent CSV injection
+      const sanitizedRow = this._sanitizeRow(updatedRow);
+      const range = sheet.getRange(rowIndex, 1, 1, sanitizedRow.length);
       console.log("Updating range:", {
         row: rowIndex,
-        columns: updatedRow.length,
-        values: updatedRow,
+        columns: sanitizedRow.length,
+        values: sanitizedRow,
       });
 
-      range.setValues([updatedRow]);
+      range.setValues([sanitizedRow]);
 
       this._clearCache(tableName);
 
@@ -1286,7 +1353,13 @@ class DB {
         sheet.deleteRow(rowIndex);
 
         const historyId = this._getNextId(historySheet);
-        historySheet.appendRow([historyId, new Date(), ...deletedRow.slice(2)]);
+        // Sanitize row to prevent CSV injection
+        const historyRow = this._sanitizeRow([
+          historyId,
+          new Date(),
+          ...deletedRow.slice(2),
+        ]);
+        historySheet.appendRow(historyRow);
 
         this._clearCache(tableName);
         this._clearCache(historyTableName);
@@ -1336,7 +1409,13 @@ class DB {
       sheet.deleteRow(rowIndex);
 
       const historyId = this._getNextId(historySheet);
-      historySheet.appendRow([historyId, new Date(), ...deletedRow.slice(2)]);
+      // Sanitize row to prevent CSV injection
+      const historyRow = this._sanitizeRow([
+        historyId,
+        new Date(),
+        ...deletedRow.slice(2),
+      ]);
+      historySheet.appendRow(historyRow);
 
       this._clearCache(tableName);
       this._clearCache(historyTableName);
@@ -1438,13 +1517,17 @@ class DB {
 
         // Add to history
         console.log("[HISTORY] Adding records to history table");
+        // Sanitize rows to prevent CSV injection
+        const sanitizedRowsToRemove = rowsToRemove.map((row) =>
+          this._sanitizeRow(row)
+        );
         const historyRange = historyTable.getRange(
           historyTable.getLastRow() == 1 ? 2 : historyTable.getLastRow(),
           1,
-          rowsToRemove.length,
-          rowsToRemove[0].length
+          sanitizedRowsToRemove.length,
+          sanitizedRowsToRemove[0].length
         );
-        historyRange.setValues(rowsToRemove);
+        historyRange.setValues(sanitizedRowsToRemove);
         console.log("[HISTORY] History records added successfully");
 
         // Clear cache
@@ -1590,13 +1673,17 @@ class DB {
 
           // Add to history
           console.log("[HISTORY] Adding records to history table");
+          // Sanitize rows to prevent CSV injection
+          const sanitizedRowsToRemove = rowsToRemove.map((row) =>
+            this._sanitizeRow(row)
+          );
           const historyRange = historyTable.getRange(
             historyTable.getLastRow() == 1 ? 2 : historyTable.getLastRow(),
             1,
-            rowsToRemove.length,
-            rowsToRemove[0].length
+            sanitizedRowsToRemove.length,
+            sanitizedRowsToRemove[0].length
           );
-          historyRange.setValues(rowsToRemove);
+          historyRange.setValues(sanitizedRowsToRemove);
           console.log("[HISTORY] History records added successfully");
 
           // Clear cache

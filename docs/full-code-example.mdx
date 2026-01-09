@@ -7,12 +7,7 @@ Here's how you can integrate the `DB` class into a web application using Google 
 
 ```javascript
 function doGet(e) {
-  var Template = HtmlService.createTemplateFromFile("index")
-    .evaluate()
-    .setTitle("Test CRUD WebApp")
-    .setFaviconUrl("https://cdn-icons-png.freepik.com/512/9850/9850812.png")
-    .addMetaTag("viewport", "width=device-width, initial-scale=1")
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  var Template = HtmlService.createTemplateFromFile("index").evaluate().setTitle("Test CRUD WebApp").setFaviconUrl("https://cdn-icons-png.freepik.com/512/9850/9850812.png").addMetaTag('viewport', 'width=device-width, initial-scale=1').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   return Template;
 }
 
@@ -20,56 +15,57 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
-const db = DB.init("testing-DB", YOUR_ID);
+const db = DB.init('testing-DB', YOUR_ID);
 
 const categoryTableConfig = {
   tableName: "CATEGORY",
   historyTableName: "DELETED_CATEGORY",
   fields: {
-    name: { type: "string", treatEmptyStringAsMissing: true },
-    created_at: { type: "date", default: "now" },
-  },
-};
+    name: "string",
+    created_at: "date"
+  }
+}
 
 const productTableConfig = {
   tableName: "PRODUCT",
   historyTableName: "DELETED_PRODUCT",
   fields: {
-    name: { type: "string", treatEmptyStringAsMissing: true },
+    name: "string",
     price: "number",
     category_fk: "number",
-    created_at: { type: "date", default: "now" },
-  },
-};
+    created_at: "date"
+  }
+}
 
 const customerTableConfig = {
   tableName: "CUSTOMER",
   historyTableName: "DELETED_CUSTOMER",
   fields: {
-    first_name: { type: "string", treatEmptyStringAsMissing: true },
-    last_name: { type: "string", treatEmptyStringAsMissing: true },
+    first_name: "string",
+    last_name: "string",
     email: "string",
-    address: { type: "string", treatNullAsMissing: true },
-    created_at: { type: "date", default: "now" },
-  },
-};
+    address: "string",
+    created_at: "date"
+  }
+}
 
 const orderTableConfig = {
   tableName: "ORDER",
   historyTableName: "DELETED_ORDER",
   fields: {
     customer_fk: "number",
-    created_at: { type: "date", default: "now" },
-  },
-};
+    created_at: "date"
+  }
+}
 
-function createSchema() {
+function createSchema(){
   console.log(db.createTable(categoryTableConfig));
   console.log(db.createTable(productTableConfig));
   console.log(db.createTable(customerTableConfig));
   console.log(db.createTable(orderTableConfig));
-  console.log(db.createTable(orderDetailConfig));
+  console.log(db.createTable(orderDetailConfig))
 }
+
 
 console.log(db.putTableIntoDbContext(categoryTableConfig));
 console.log(db.putTableIntoDbContext(productTableConfig));
@@ -77,16 +73,18 @@ console.log(db.putTableIntoDbContext(customerTableConfig));
 console.log(db.putTableIntoDbContext(orderTableConfig));
 
 const responseCreation = db.createManyToManyTableConfig({
-  entity1TableName: orderTableConfig.tableName,
-  entity2TableName: productTableConfig.tableName,
+  entity1TableName : orderTableConfig.tableName,
+  entity2TableName : productTableConfig.tableName,
   fieldsRelatedToBothEntities: {
-    quantity: "number",
-  },
-});
+    quantity: "number"
+  }
+})
+
 
 const orderDetailConfig = responseCreation.data;
 
 console.log(db.putTableIntoDbContext(orderDetailConfig));
+
 
 /**
  * ||=====================================================||
@@ -94,75 +92,77 @@ console.log(db.putTableIntoDbContext(orderDetailConfig));
  * ||=====================================================||
  */
 
-function getCategoryRelatedRecords(
-  foreignKey,
-  field = "category_fk",
-  fieldIndex = 4,
-  options = {},
-  useCache = false
-) {
+function getCategoryRelatedRecords(foreignKey, field="category_fk", fieldIndex = 4, options={}, useCache=false){
   const response = db.getRelatedRecords(
-    foreignKey,
-    productTableConfig.tableName,
-    field,
-    fieldIndex,
-    options,
-    useCache
-  );
+          foreignKey,
+          productTableConfig.tableName,
+          field,
+          fieldIndex,
+          options,
+          useCache)
   return JSON.stringify(response);
 }
 
-function createCategory(newCategory) {
+function createCategory(newCategory){
   newCategory.created_at = new Date(newCategory.created_at);
   const response = db.create(
-    categoryTableConfig.tableName,
-    newCategory,
-    Object.keys(categoryTableConfig.fields)
-  );
+          categoryTableConfig.tableName,
+          newCategory,
+          Object.keys(categoryTableConfig.fields)
+  )
 
   console.log(response);
   return JSON.stringify(response);
 }
 
-function readCategoryTable() {
+
+
+function readCategoryTable(){
   const response = db.getAll(
-    categoryTableConfig.tableName,
-    (options = {}),
-    (useCache = false)
-  );
-  console.log(response.status);
-  console.log(response.message);
+          categoryTableConfig.tableName,
+          options={},
+          useCache = false
+  )
+  console.log(response.status)
+  console.log(response.message)
 
   return JSON.stringify(response);
 }
 
-function updateCategory(updatedCategory, id) {
+function updateCategory(updatedCategory, id){
+  // console.log("to update:",updatedCategory)
+  // console.log("id",id)
+  updatedCategory.created_at = new Date(updatedCategory.created_at);
+
   const response = db.update(
-    categoryTableConfig.tableName,
-    id,
-    updatedCategory,
-    Object.keys(categoryTableConfig.fields)
-  );
+          categoryTableConfig.tableName,
+          id,
+          updatedCategory,
+          Object.keys(categoryTableConfig.fields)
+  )
 
   console.log(response);
 
   return JSON.stringify(response);
 }
 
-function readCategoryById(id) {
-  const response = db.read(categoryTableConfig.tableName, id);
+function readCategoryById (id){
+  const response = db.read(
+          categoryTableConfig.tableName,
+          id
+  )
 
-  console.log(response);
+  console.log(response)
 
   return JSON.stringify(response);
 }
 
-function removeCategory(id) {
+function removeCategory(id){
   const response = db.remove(
-    categoryTableConfig.tableName,
-    categoryTableConfig.historyTableName,
-    id
-  );
+          categoryTableConfig.tableName,
+          categoryTableConfig.historyTableName,
+          id
+  )
 
   console.log(response);
 
@@ -180,18 +180,18 @@ function createProduct(newProduct) {
     newProduct.created_at = new Date(newProduct.created_at);
   }
   const response = db.create(
-    productTableConfig.tableName,
-    newProduct,
-    Object.keys(productTableConfig.fields)
+          productTableConfig.tableName,
+          newProduct,
+          Object.keys(productTableConfig.fields)
   );
   return JSON.stringify(response);
 }
 
 function readProductTable() {
   const response = db.getAll(
-    productTableConfig.tableName,
-    {}, // options = {}
-    false // useCache = false
+          productTableConfig.tableName,
+          {},      // options = {}
+          false    // useCache = false
   );
   return JSON.stringify(response);
 }
@@ -206,22 +206,23 @@ function updateProduct(updatedProduct, id) {
     updatedProduct.created_at = new Date(updatedProduct.created_at);
   }
   const response = db.update(
-    productTableConfig.tableName,
-    id,
-    updatedProduct,
-    Object.keys(productTableConfig.fields)
+          productTableConfig.tableName,
+          id,
+          updatedProduct,
+          Object.keys(productTableConfig.fields)
   );
   return JSON.stringify(response);
 }
 
 function removeProduct(id) {
   const response = db.removeWithCascade(
-    productTableConfig.tableName,
-    productTableConfig.historyTableName,
-    id
+          productTableConfig.tableName,
+          productTableConfig.historyTableName,
+          id
   );
   return JSON.stringify(response);
 }
+
 
 /**
  * ||=====================================================||
@@ -229,21 +230,15 @@ function removeProduct(id) {
  * ||=====================================================||
  */
 
-function getRelatedCustomerRecords(
-  foreignKey,
-  field = "customer_fk",
-  fieldIndex = 2,
-  options = {},
-  useCache = false
-) {
+function getRelatedCustomerRecords(foreignKey, field="customer_fk", fieldIndex= 2,options={}, useCache=false){
   const response = db.getRelatedRecords(
-    foreignKey,
-    orderTableConfig.tableName,
-    field,
-    fieldIndex,
-    options,
-    useCache
-  );
+          foreignKey,
+          orderTableConfig.tableName,
+          field,
+          fieldIndex,
+          options,
+          useCache
+  )
 
   return JSON.stringify(response);
 }
@@ -253,15 +248,19 @@ function createCustomer(newCustomer) {
     newCustomer.created_at = new Date(newCustomer.created_at);
   }
   const response = db.create(
-    customerTableConfig.tableName,
-    newCustomer,
-    Object.keys(customerTableConfig.fields)
+          customerTableConfig.tableName,
+          newCustomer,
+          Object.keys(customerTableConfig.fields)
   );
   return JSON.stringify(response);
 }
 
 function readCustomerTable() {
-  const response = db.getAll(customerTableConfig.tableName, {}, false);
+  const response = db.getAll(
+          customerTableConfig.tableName,
+          {},
+          false
+  );
   return JSON.stringify(response);
 }
 
@@ -275,22 +274,23 @@ function updateCustomer(updatedCustomer, id) {
     updatedCustomer.created_at = new Date(updatedCustomer.created_at);
   }
   const response = db.update(
-    customerTableConfig.tableName,
-    id,
-    updatedCustomer,
-    Object.keys(customerTableConfig.fields)
+          customerTableConfig.tableName,
+          id,
+          updatedCustomer,
+          Object.keys(customerTableConfig.fields)
   );
   return JSON.stringify(response);
 }
 
 function removeCustomer(id) {
   const response = db.remove(
-    customerTableConfig.tableName,
-    customerTableConfig.historyTableName,
-    id
+          customerTableConfig.tableName,
+          customerTableConfig.historyTableName,
+          id
   );
   return JSON.stringify(response);
 }
+
 
 /**
  * ||=====================================================||
@@ -302,9 +302,9 @@ function createOrder(newOrder) {
     newOrder.created_at = new Date(newOrder.created_at);
   }
   const response = db.create(
-    orderTableConfig.tableName,
-    newOrder,
-    Object.keys(orderTableConfig.fields)
+          orderTableConfig.tableName,
+          newOrder,
+          Object.keys(orderTableConfig.fields)
   );
   return JSON.stringify(response);
 }
@@ -324,22 +324,23 @@ function updateOrder(updatedOrder, id) {
     updatedOrder.created_at = new Date(updatedOrder.created_at);
   }
   const response = db.update(
-    orderTableConfig.tableName,
-    id,
-    updatedOrder,
-    Object.keys(orderTableConfig.fields)
+          orderTableConfig.tableName,
+          id,
+          updatedOrder,
+          Object.keys(orderTableConfig.fields)
   );
   return JSON.stringify(response);
 }
 
 function removeOrder(id) {
   const response = db.removeWithCascade(
-    orderTableConfig.tableName,
-    orderTableConfig.historyTableName,
-    id
+          orderTableConfig.tableName,
+          orderTableConfig.historyTableName,
+          id
   );
   return JSON.stringify(response);
 }
+
 
 /**
  * ||=====================================================||
@@ -355,9 +356,9 @@ function createOrderDetail(newOrderDetail) {
   }
   // orderDetailConfig.fields => { created_at, order_id, product_id, quantity, ... }
   const response = db.create(
-    orderDetailConfig.tableName,
-    newOrderDetail,
-    Object.keys(orderDetailConfig.fields)
+          orderDetailConfig.tableName,
+          newOrderDetail,
+          Object.keys(orderDetailConfig.fields)
   );
   return JSON.stringify(response);
 }
@@ -377,57 +378,57 @@ function updateOrderDetail(updatedOrderDetail, id) {
     updatedOrderDetail.created_at = new Date(updatedOrderDetail.created_at);
   }
   const response = db.update(
-    orderDetailConfig.tableName,
-    id,
-    updatedOrderDetail,
-    Object.keys(orderDetailConfig.fields)
+          orderDetailConfig.tableName,
+          id,
+          updatedOrderDetail,
+          Object.keys(orderDetailConfig.fields)
   );
   return JSON.stringify(response);
 }
 
 function removeOrderDetail(id) {
   const response = db.remove(
-    orderDetailConfig.tableName,
-    orderDetailConfig.historyTableName,
-    id
+          orderDetailConfig.tableName,
+          orderDetailConfig.historyTableName,
+          id
   );
   return JSON.stringify(response);
 }
 
-function readOrderDetailFromOrder(sourceId) {
+function readOrderDetailFromOrder(sourceId){
   const response = db.getJunctionRecords(
-    orderDetailConfig.tableName,
-    orderTableConfig.tableName,
-    productTableConfig.tableName,
-    sourceId,
-    (options = {})
-  );
+          orderDetailConfig.tableName,
+          orderTableConfig.tableName,
+          productTableConfig.tableName,
+          sourceId,
+          options = {}
+  )
 
   console.log(response.status);
   console.log(response.message);
   console.log(response.metadata);
 
-  for (record of response.data) {
+  for (record of response.data){
     console.log(record);
   }
 
   return JSON.stringify(response);
 }
 
-function readOrderDetailFromProduct(sourceId) {
+function readOrderDetailFromProduct(sourceId){
   const response = db.getJunctionRecords(
-    orderDetailConfig.tableName,
-    productTableConfig.tableName,
-    orderTableConfig.tableName,
-    sourceId,
-    (options = {})
-  );
+          orderDetailConfig.tableName,
+          productTableConfig.tableName,
+          orderTableConfig.tableName,
+          sourceId,
+          options = {}
+  )
 
   console.log(response.status);
   console.log(response.message);
   console.log(response.metadata);
 
-  for (record of response.data) {
+  for (record of response.data){
     console.log(record);
   }
 
