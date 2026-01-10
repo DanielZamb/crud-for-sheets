@@ -66,6 +66,8 @@ function createSchema(){
   console.log(db.createTable(orderDetailConfig))
 }
 
+// ⚠️ IMPORTANT: Run createSchema() ONCE from the GAS editor to create all sheet tabs
+// After running once, you don't need to run it again unless adding new tables
 
 console.log(db.putTableIntoDbContext(categoryTableConfig));
 console.log(db.putTableIntoDbContext(productTableConfig));
