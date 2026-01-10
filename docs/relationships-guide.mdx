@@ -1,0 +1,680 @@
+---
+title: Working with Relationships
+description: A comprehensive guide to one-to-many and many-to-many relationships in gas-db
+---
+
+# Working with Relationships
+
+This guide explains how to set up and query relationships between tables in gas-db. We'll cover both **one-to-many** and **many-to-many** relationships with practical examples.
+
+---
+
+## 🔗 Understanding Relationships
+
+gas-db supports two types of relationships:
+
+1. **One-to-Many**: A record in Table A can be associated with multiple records in Table B
+   - Example: One USER can have many FUNDS
+   - Uses: `getRelatedRecords()`
+
+2. **Many-to-Many**: Multiple records in Table A can be associated with multiple records in Table B
+   - Example: Multiple USERS can share multiple CATEGORIES
+   - Uses: `getJunctionRecords()` with a junction table
+
+---
+
+## 📌 One-to-Many Relationships
+
+### Naming Convention
+
+Follow this convention for foreign keys:
+- **Pattern**: `{table_name}_fk` or `{table_name}_id`
+- **Examples**:
+  - `user_fk` → references USERS table
+  - `category_id` → references CATEGORIES table
+  - `role_fk` → references ROLES table
+
+> **Note**: The convention is not enforced by the library - it's a best practice for code clarity. You still need to explicitly specify the field name and index when querying.
+
+### Example: USER → FUNDS Relationship
+
+**Step 1: Define the Tables**
+
+```javascript
+const db = DB.init("MyDatabase");
+
+// Parent table
+const userTableConfig = {
+  tableName: "USERS",
+  historyTableName: "DELETED_USERS",
+  fields: {
+    created_at: { type: "date", default: "now" },
+    email: "string",
+    first_name: "string",
+    last_name: "string",
+  }
+};
+
+// Child table with foreign key
+const fundsTableConfig = {
+  tableName: "FUNDS",
+  historyTableName: "DELETED_FUNDS",
+  fields: {
+    created_at: { type: "date", default: "now" },
+    fund_name: "string",
+    fund_emoji: "string",
+    user_fk: "number",  // ← Foreign key referencing USERS.id
+    is_active: { type: "boolean", default: true }
+  }
+};
+```
+
+**Step 2: Create and Register Tables**
+
+```javascript
+function createTables() {
+  db.createTable(userTableConfig);
+  db.createTable(fundsTableConfig);
+}
+
+// Put tables into context (runs every time)
+db.putTableIntoDbContext(userTableConfig);
+db.putTableIntoDbContext(fundsTableConfig);
+```
+
+**Step 3: Create Related Records**
+
+```javascript
+function setupUserWithFunds() {
+  // Create a user
+  const userResult = db.create("USERS", {
+    email: "john@example.com",
+    first_name: "John",
+    last_name: "Doe"
+  }, ["email", "first_name", "last_name"]);
+
+  const userId = userResult.id;
+
+  // Create funds for this user
+  db.create("FUNDS", {
+    fund_name: "Savings",
+    fund_emoji: "💰",
+    user_fk: userId  // ← Link to user
+  }, ["fund_name", "fund_emoji", "user_fk"]);
+
+  db.create("FUNDS", {
+    fund_name: "Emergency",
+    fund_emoji: "🏥",
+    user_fk: userId  // ← Link to same user
+  }, ["fund_name", "fund_emoji", "user_fk"]);
+}
+```
+
+**Step 4: Query Related Records**
+
+```javascript
+/**
+ * Get all funds for a specific user
+ *
+ * @param {number} userId - The user's ID
+ * @returns {Object} Response with array of funds
+ */
+function getAllUserFunds(userId) {
+  const response = db.getRelatedRecords(
+    userId,                        // foreignKey - the user ID to search for
+    "FUNDS",                       // tableName - table to search in
+    "user_fk",                     // field - name of the FK column
+    4,                             // fieldIndex - column position (0-based)
+    {                              // options - pagination/sorting
+      sortBy: "fund_name",
+      sortOrder: "asc"
+    },
+    false                          // useCache
+  );
+
+  return JSON.stringify(response);
+}
+
+// Usage
+const userFunds = getAllUserFunds(1);
+// Returns: { status: 200, data: [{ id: 1, fund_name: "Emergency", ... }, ...] }
+```
+
+### 🔍 Understanding fieldIndex
+
+The `fieldIndex` parameter requires you to specify the **column position** of the foreign key field. This is 0-based counting.
+
+**How to find the correct index:**
+
+```javascript
+// Given this table config:
+const fundsTableConfig = {
+  fields: {
+    created_at: "date",    // Column 0: ID (auto-added)
+    fund_name: "string",   // Column 1: DATE (auto-added)
+    fund_emoji: "string",  // Column 2: created_at
+    user_fk: "number",     // Column 3: fund_name
+    is_active: "boolean"   // Column 4: fund_emoji
+  }                        // Column 5: user_fk ← THIS IS THE INDEX
+};                         // Column 6: is_active
+
+// The library automatically adds:
+// - Column 0: ID
+// - Column 1: DATE
+
+// So user_fk is at index 5 (0-based counting from left)
+const fieldIndex = 5;
+```
+
+> **Tip**: Count from the leftmost column in your spreadsheet, starting at 0. Include the auto-generated ID and DATE columns.
+
+### More One-to-Many Examples
+
+**Example: CATEGORY → PRODUCTS**
+
+```javascript
+const categoryTableConfig = {
+  tableName: "CATEGORIES",
+  fields: { name: "string" }
+};
+
+const productTableConfig = {
+  tableName: "PRODUCTS",
+  fields: {
+    name: "string",
+    price: "number",
+    category_fk: "number"  // ← References CATEGORIES.id
+  }
+};
+
+// Get all products in a category
+function getProductsByCategory(categoryId) {
+  return db.getRelatedRecords(
+    categoryId,      // Foreign key value
+    "PRODUCTS",      // Table to search
+    "category_fk",   // FK field name
+    4,               // Column index (ID, DATE, name, price, category_fk)
+    {},
+    false
+  );
+}
+```
+
+**Example: ORDER → ORDER_ITEMS**
+
+```javascript
+const orderTableConfig = {
+  tableName: "ORDERS",
+  fields: {
+    customer_name: "string",
+    order_date: "date"
+  }
+};
+
+const orderItemTableConfig = {
+  tableName: "ORDER_ITEMS",
+  fields: {
+    order_fk: "number",  // ← References ORDERS.id
+    product_name: "string",
+    quantity: "number"
+  }
+};
+
+// Get all items in an order
+function getOrderItems(orderId) {
+  return db.getRelatedRecords(
+    orderId,
+    "ORDER_ITEMS",
+    "order_fk",
+    2,  // Column index
+    { sortBy: "product_name" },
+    false
+  );
+}
+```
+
+---
+
+## 🔀 Many-to-Many Relationships
+
+Many-to-many relationships require a **junction table** (also called a join table or pivot table) to link two entities.
+
+### Example: USERS ↔ CATEGORIES
+
+Users can have multiple categories, and categories can be shared by multiple users.
+
+**Step 1: Define Primary Tables**
+
+```javascript
+const userTableConfig = {
+  tableName: "USERS",
+  fields: {
+    email: "string",
+    first_name: "string"
+  }
+};
+
+const categoryTableConfig = {
+  tableName: "CATEGORIES",
+  fields: {
+    category_name: "string",
+    category_type: "string",
+    emoji: "string"
+  }
+};
+```
+
+**Step 2: Create Junction Table Configuration**
+
+```javascript
+// Generate junction table config automatically
+const junctionConfigResult = db.createManyToManyTableConfig({
+  entity1TableName: "USERS",
+  entity2TableName: "CATEGORIES",
+  fieldsRelatedToBothEntities: {
+    // Optional: additional fields specific to this relationship
+    assigned_at: { type: "date", default: "now" },
+    is_favorite: { type: "boolean", default: false }
+  }
+});
+
+// Extract the generated config
+const userCategoryJunctionTable = junctionConfigResult.data;
+
+/*
+ * Generated config structure:
+ * {
+ *   tableName: "USERS_CATEGORIES_RELATION",
+ *   historyTableName: "DELETED_USERS_CATEGORIES_RELATION",
+ *   fields: {
+ *     created_at: "date",
+ *     users_id: "number",      ← References USERS.id
+ *     categories_id: "number", ← References CATEGORIES.id
+ *     assigned_at: "date",
+ *     is_favorite: "boolean"
+ *   }
+ * }
+ */
+```
+
+**Step 3: Create and Register All Tables**
+
+```javascript
+function createTables() {
+  db.createTable(userTableConfig);
+  db.createTable(categoryTableConfig);
+  db.createTable(userCategoryJunctionTable);
+}
+
+// Register tables in context
+db.putTableIntoDbContext(userTableConfig);
+db.putTableIntoDbContext(categoryTableConfig);
+db.putTableIntoDbContext(userCategoryJunctionTable);
+```
+
+**Step 4: Link Records**
+
+```javascript
+function assignCategoryToUser(userId, categoryId) {
+  const result = db.createJunctionRecord(
+    userCategoryJunctionTable.tableName,
+    {
+      users_id: userId,
+      categories_id: categoryId,
+      is_favorite: false
+    },
+    Object.keys(userCategoryJunctionTable.fields)
+  );
+
+  return JSON.stringify(result);
+}
+
+// Usage
+assignCategoryToUser(1, 5);  // Link user #1 to category #5
+assignCategoryToUser(1, 7);  // Link user #1 to category #7
+assignCategoryToUser(2, 5);  // Link user #2 to category #5 (shared!)
+```
+
+**Step 5: Query Related Records**
+
+```javascript
+/**
+ * Get all categories assigned to a user
+ */
+function getCategoriesForUser(userId) {
+  const result = db.getJunctionRecords(
+    userCategoryJunctionTable.tableName,  // Junction table
+    "USERS",                              // Source table
+    "CATEGORIES",                         // Target table to retrieve
+    userId,                               // Source ID
+    {                                     // Options
+      sortBy: "category_name",
+      sortOrder: "asc"
+    }
+  );
+
+  return JSON.stringify(result);
+}
+
+/**
+ * Get all users who have access to a category
+ */
+function getUsersForCategory(categoryId) {
+  const result = db.getJunctionRecords(
+    userCategoryJunctionTable.tableName,  // Junction table
+    "CATEGORIES",                         // Source table (swapped!)
+    "USERS",                              // Target table to retrieve
+    categoryId,                           // Source ID
+    {}
+  );
+
+  return JSON.stringify(result);
+}
+
+// Usage
+const userCategories = getCategoriesForUser(1);
+// Returns: { status: 200, data: [{ id: 5, category_name: "Food", ... }, ...] }
+
+const categoryUsers = getUsersForCategory(5);
+// Returns: { status: 200, data: [{ id: 1, email: "john@example.com", ... }, ...] }
+```
+
+### Updating Junction Records
+
+```javascript
+function updateUserCategoryRelation(relationId, updates) {
+  const result = db.updateJunctionRecord(
+    userCategoryJunctionTable.tableName,
+    relationId,
+    updates,
+    Object.keys(userCategoryJunctionTable.fields)
+  );
+
+  return JSON.stringify(result);
+}
+
+// Mark as favorite
+updateUserCategoryRelation(10, { is_favorite: true });
+```
+
+### Removing Links
+
+```javascript
+function unlinkUserFromCategory(relationId) {
+  const result = db.remove(
+    userCategoryJunctionTable.tableName,
+    userCategoryJunctionTable.historyTableName,
+    relationId
+  );
+
+  return JSON.stringify(result);
+}
+```
+
+### Cascade Deletion
+
+When deleting a parent record, automatically clean up junction table entries:
+
+```javascript
+function deleteUser(userId) {
+  // This will also remove all entries in junction tables
+  const result = db.removeWithCascade(
+    "USERS",
+    "DELETED_USERS",
+    userId
+  );
+
+  return JSON.stringify(result);
+}
+```
+
+### Integrity Checks
+
+Validate that all foreign keys in your junction table still reference existing records:
+
+```javascript
+function checkUserCategoryIntegrity() {
+  const result = db.checkTableIntegrity(
+    userCategoryJunctionTable.tableName,
+    userCategoryJunctionTable.historyTableName
+  );
+
+  // Returns: { status: 200, count: 3, message: "Moved 3 orphaned records to history" }
+  return JSON.stringify(result);
+}
+```
+
+---
+
+## 🆚 When to Use Which Method
+
+| Scenario | Method | Example |
+|----------|--------|---------|
+| **One parent → Many children** | `getRelatedRecords()` | One USER has many FUNDS |
+| **Query by direct FK** | `getRelatedRecords()` | Get all PRODUCTS with `category_fk=5` |
+| **Many ↔ Many** | `getJunctionRecords()` | USERS ↔ CATEGORIES (junction table) |
+| **Need link metadata** | `getJunctionRecords()` | Store "assigned_at" for USER-CATEGORY link |
+
+---
+
+## 🎯 Best Practices
+
+### 1. Consistent Naming
+
+```javascript
+// Good - Clear FK naming
+fields: {
+  user_fk: "number",      // References USERS
+  category_fk: "number"   // References CATEGORIES
+}
+
+// Also good - Alternative pattern
+fields: {
+  user_id: "number",
+  category_id: "number"
+}
+```
+
+### 2. Document Field Indexes
+
+```javascript
+/**
+ * Field indexes for FUNDS table:
+ * 0: id (auto)
+ * 1: date (auto)
+ * 2: created_at
+ * 3: fund_name
+ * 4: fund_emoji
+ * 5: user_fk ← USERS.id
+ * 6: is_active
+ */
+const USER_FK_INDEX = 5;
+
+function getUserFunds(userId) {
+  return db.getRelatedRecords(
+    userId,
+    "FUNDS",
+    "user_fk",
+    USER_FK_INDEX,  // Use named constant
+    {},
+    false
+  );
+}
+```
+
+### 3. Wrap in Helper Functions
+
+```javascript
+// Create reusable helpers
+function getUserFunds(userId, options = {}) {
+  return db.getRelatedRecords(
+    userId,
+    "FUNDS",
+    "user_fk",
+    5,
+    options,
+    false
+  );
+}
+
+function getUserCategories(userId, options = {}) {
+  return db.getJunctionRecords(
+    userCategoryJunctionTable.tableName,
+    "USERS",
+    "CATEGORIES",
+    userId,
+    options
+  );
+}
+
+// Now your code is cleaner
+const funds = getUserFunds(1);
+const categories = getUserCategories(1, { sortBy: "category_name" });
+```
+
+### 4. Handle Empty Results
+
+```javascript
+function getUserFunds(userId) {
+  const response = db.getRelatedRecords(userId, "FUNDS", "user_fk", 5, {}, false);
+
+  if (response.status !== 200) {
+    console.error("Error fetching funds:", response.error);
+    return [];
+  }
+
+  if (!response.data || response.data.length === 0) {
+    console.log("No funds found for user:", userId);
+    return [];
+  }
+
+  return response.data;
+}
+```
+
+### 5. Use Junction Tables for Complex Relationships
+
+If you need to store metadata about the relationship itself, use a junction table:
+
+```javascript
+// BAD - Can't track when enrollment happened
+const studentTableConfig = {
+  fields: {
+    name: "string",
+    course_fk: "number"  // Student can only have ONE course
+  }
+};
+
+// GOOD - Can track enrollment date, grade, etc.
+const enrollmentJunctionConfig = db.createManyToManyTableConfig({
+  entity1TableName: "STUDENTS",
+  entity2TableName: "COURSES",
+  fieldsRelatedToBothEntities: {
+    enrolled_at: { type: "date", default: "now" },
+    grade: "string",
+    completed: { type: "boolean", default: false }
+  }
+});
+```
+
+---
+
+## 📚 Complete Real-World Example
+
+Here's a complete finance tracker example showing multiple relationship types:
+
+```javascript
+const db = DB.init("finance-tracker", "YOUR_SHEET_ID");
+
+// Parent table
+const userTableConfig = {
+  tableName: "USERS",
+  fields: { email: "string", first_name: "string" }
+};
+
+// Child table (one-to-many)
+const fundsTableConfig = {
+  tableName: "FUNDS",
+  fields: {
+    fund_name: "string",
+    user_fk: "number"  // One user → many funds
+  }
+};
+
+// Another child table (one-to-many)
+const transactionTableConfig = {
+  tableName: "TRANSACTIONS",
+  fields: {
+    amount: "number",
+    reason: "string",
+    fund_id: "string",   // One fund → many transactions
+    user_fk: "number"    // One user → many transactions
+  }
+};
+
+// Independent table
+const categoryTableConfig = {
+  tableName: "CATEGORIES",
+  fields: { name: "string", emoji: "string" }
+};
+
+// Junction table (many-to-many)
+const userCategoryJunction = db.createManyToManyTableConfig({
+  entity1TableName: "USERS",
+  entity2TableName: "CATEGORIES"
+}).data;
+
+// Register all tables
+db.putTableIntoDbContext(userTableConfig);
+db.putTableIntoDbContext(fundsTableConfig);
+db.putTableIntoDbContext(transactionTableConfig);
+db.putTableIntoDbContext(categoryTableConfig);
+db.putTableIntoDbContext(userCategoryJunction);
+
+// Query helpers
+function getUserFunds(userId) {
+  return db.getRelatedRecords(userId, "FUNDS", "user_fk", 4, {}, false);
+}
+
+function getUserTransactions(userId) {
+  return db.getRelatedRecords(userId, "TRANSACTIONS", "user_fk", 6, {}, false);
+}
+
+function getUserCategories(userId) {
+  return db.getJunctionRecords(
+    userCategoryJunction.tableName,
+    "USERS",
+    "CATEGORIES",
+    userId,
+    {}
+  );
+}
+```
+
+---
+
+## 🔗 Related Documentation
+
+- [API Reference](/api-reference) - Full method signatures
+- [CRUD Operations](/crud-operations) - Basic operations
+- [Advanced Examples](/advanced-examples) - More complex scenarios
+- [Full Code Example](/full-code-example) - Complete working example
+
+---
+
+## ❓ Common Questions
+
+**Q: Why do I need to specify fieldIndex manually?**
+A: Google Sheets doesn't provide column metadata, so we need the exact position to efficiently search the sheet.
+
+**Q: Can relationships be auto-detected from field names?**
+A: No, you must explicitly call `getRelatedRecords()` or `getJunctionRecords()` with the field name and index. This gives you full control over queries.
+
+**Q: What happens if I delete a parent record?**
+A: Use `removeWithCascade()` to automatically clean up related junction table entries. Direct FK relationships in child tables are not automatically deleted.
+
+**Q: Can I have multiple foreign keys in one table?**
+A: Yes! A table can have multiple FK fields referencing different tables. Just query each relationship separately.
+
+**Q: How do I validate that all FKs are valid?**
+A: Use `checkTableIntegrity()` for junction tables. For regular tables, you'd need to implement custom validation.

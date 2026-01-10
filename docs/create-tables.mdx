@@ -92,6 +92,16 @@ function createTables() {
 }
 ```
 
+> **⚠️ Important First-Time Setup**: You must run the `createTables()` function **once** from the Google Apps Script editor to physically create the sheet tabs in your spreadsheet. After the sheets are created, you don't need to run it again.
+>
+> **To do this:**
+> 1. Open the Google Apps Script editor
+> 2. Select `createTables` from the function dropdown menu at the top
+> 3. Click the **Run** button (▶️)
+> 4. Grant any required permissions when prompted
+>
+> The sheets will be created in your spreadsheet and are ready to use. You only need to do this once per database setup.
+
 After creation, remember that you **must** place them into the DB Context, otherwise they wont be available to operate with.
 I Recomend doing this as separate declarations, if there are few tables.
 If there's a hefty amount of tables, you can loop through them and place them into the context.

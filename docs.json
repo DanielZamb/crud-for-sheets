@@ -51,6 +51,16 @@
         "icon": "code"
       },
       {
+        "title": "Live Webapp Demo",
+        "href": "/webapp-demo",
+        "icon": "globe"
+      },
+      {
+        "title": "Working with Relationships",
+        "href": "/relationships-guide",
+        "icon": "link"
+      },
+      {
         "title": "Next Steps",
         "href": "/next-steps",
         "icon": "arrow-right"

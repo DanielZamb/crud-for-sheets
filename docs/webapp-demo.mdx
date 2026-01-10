@@ -1,0 +1,294 @@
+---
+title: Live Webapp Demo
+description: A full-featured reference application showcasing GAS-DB in action
+---
+
+# Live Webapp Demo
+
+Experience GAS-DB in action with our comprehensive web application that demonstrates all major features of the library. This is a fully functional e-commerce management system built entirely with Google Sheets as the database.
+
+## Try It Now
+
+**Live Demo**: [https://script.google.com/macros/s/AKfycbx2XYI88p6MuSJZPtggWZkguAii6jI-CBEPAwlS_XV5beFSVVzR_U9H-NpkcgBF8Vc-dw/exec](https://script.google.com/macros/s/AKfycbx2XYI88p6MuSJZPtggWZkguAii6jI-CBEPAwlS_XV5beFSVVzR_U9H-NpkcgBF8Vc-dw/exec)
+
+**Source Code**: [GitHub Repository](https://github.com/zambamon/test-db-webapp)
+
+> **Note**: The Google Sheets database for this demo is already set up and configured. You can use the app immediately to explore features without any setup.
+
+---
+
+## What This Demo Shows
+
+This reference application implements a complete e-commerce system with:
+
+- **5 interconnected tables**: Categories, Products, Customers, Orders, and Order Details
+- **Full CRUD operations** for all entities
+- **One-to-many relationships**: Categories → Products, Customers → Orders
+- **Many-to-many relationships**: Orders ↔ Products via junction table
+- **Advanced features**: Cascade deletion, relationship queries, data integrity checks
+- **Modern UI**: Built with Tailwind CSS v4, DataTables, and Tom Select
+
+---
+
+## Features You Can Explore
+
+### Basic CRUD Operations
+
+Navigate through different modules in the sidebar to:
+
+- **Create** new records with auto-validating forms
+- **Read** and browse data in sortable, searchable tables
+- **Update** existing records with pre-populated forms
+- **Delete** records with confirmation dialogs
+
+Each module (Categories, Products, Customers, Orders, Order Details) demonstrates standard database operations with automatic type validation and conversion.
+
+### Relationship Management
+
+**One-to-Many Examples:**
+- Click the info button (ℹ️) on any Category to see all Products in that category
+- Click the info button on any Customer to see all their Orders
+- Uses `getRelatedRecords()` to efficiently query child records
+
+**Many-to-Many Examples:**
+- Use the Order Details module to explore the junction table
+- View which Products are in an Order, or which Orders contain a Product
+- Uses `getJunctionRecords()` to traverse the relationship in both directions
+
+### Advanced Features Module
+
+The "Advanced Features" section demonstrates debugging and optimization tools:
+
+- **Enhanced Logging**: See detailed validation logs with `createWithLogs()` and `updateWithLogs()`
+- **Relationship Debugging**: Use `getRelatedWithLogs()` to understand query behavior
+- **Data Integrity**: Check and clean orphaned junction records
+- **Query Comparison**: Compare performance of TextFinder vs Filter vs standard queries
+- **Visual Styling**: Apply color schemes to sheet tables
+
+### UI/UX Highlights
+
+- **Global Search Bar**: Type to search across all modules (press ⌘K for quick access)
+- **Command Palette**: Keyboard-driven navigation with Cmd/Ctrl+K
+- **Loading States**: Visual feedback on all async operations
+- **Dark Mode**: Toggle between light and dark themes
+- **Responsive Design**: Works on desktop and mobile devices
+
+---
+
+## Data Model
+
+The application uses a sample e-commerce schema:
+
+```
+CATEGORY (parent)
+  └─→ PRODUCT (child, via category_fk)
+
+CUSTOMER (parent)
+  └─→ ORDER (child, via customer_fk)
+
+ORDER ←→ PRODUCT (many-to-many via ORDER_DETAIL junction table)
+```
+
+All tables include:
+- Auto-generated ID column
+- Auto-generated DATE column
+- Type-validated fields (string, number, boolean, date)
+- Optional default values
+- History tables for soft deletes
+
+---
+
+## How to Use the App
+
+### Navigation
+
+1. **Sidebar Menu**: Click the hamburger icon to open the sidebar
+2. **Module Selection**: Choose from Categories, Products, Customers, Orders, Order Details, or Advanced Features
+3. **Search**: Use the top search bar or press ⌘K (Ctrl+K on Windows) for quick navigation
+
+### Creating Records
+
+1. Navigate to any module
+2. Click the **Create** button
+3. Fill out the form (foreign key dropdowns auto-populate)
+4. Click **Submit**
+5. Refresh the table to see your new record
+
+### Editing Records
+
+1. Find a record in the table
+2. Click the **Edit** button (pencil icon) in the Actions column
+3. Modify the pre-populated form
+4. Click **Update**
+5. The table refreshes automatically
+
+### Deleting Records
+
+1. Find a record in the table
+2. Click the **Delete** button (trash icon) in the Actions column
+3. Confirm the deletion in the popup
+4. The record moves to the history table
+
+### Viewing Relationships
+
+**For One-to-Many:**
+- In Categories table: Click the info button to see related Products
+- In Customers table: Click the info button to see related Orders
+
+**For Many-to-Many:**
+- Go to Order Details module
+- Click "Read Junction Records"
+- Choose direction: Orders → Products or Products → Orders
+- Enter the ID and view related records
+
+---
+
+## Important Notes for Developers
+
+### The Sheets Are Pre-Configured
+
+The demo webapp uses a Google Spreadsheet that's already set up with:
+- All required tables created
+- Sample data populated
+- Proper schema configuration
+- History tables for soft deletes
+
+You can experiment freely - your changes won't affect other users (each user gets their own instance).
+
+### Forking and Customization
+
+If you want to **fork this project** and run your own version:
+
+1. **Clone the repository**: [test-db-webapp on GitHub](https://github.com/zambamon/test-db-webapp)
+2. **Create a new Google Sheet**: You'll need your own blank spreadsheet
+3. **Update the Sheet ID**: In `server.js`, replace the spreadsheet ID in the `DB.init()` call
+4. **Run `createSchema()`**: Execute this function once from the Apps Script editor to create all tables
+5. **Deploy as Web App**: Follow the deployment instructions in the repo's README
+
+The repository includes:
+- Complete server-side code (`server.js`)
+- All HTML templates (`index.html`, `main.js.html`, `styles.css.html`)
+- Configuration files (`.clasp.json`, `appsscript.json`)
+- Deployment instructions using CLASP
+
+### Technology Stack
+
+**Frontend:**
+- Tailwind CSS v4 (CDN browser build)
+- Bootstrap Icons (icons only, no Bootstrap JS)
+- DataTables (table sorting/search/pagination)
+- Tom Select (enhanced select dropdowns)
+- SweetAlert2 (modern dialogs and toasts)
+- Plain JavaScript for custom interactions
+
+**Backend:**
+- Google Apps Script
+- GAS-DB library (this project)
+- Google Sheets as database
+
+---
+
+## Use Cases
+
+This demo is perfect for:
+
+- **Learning GAS-DB**: See all features in action with a real-world example
+- **Reference Implementation**: Use as a template for your own projects
+- **Testing Ideas**: Experiment with relationships and CRUD operations
+- **Demonstrations**: Show stakeholders what's possible with Google Sheets as a database
+- **Rapid Prototyping**: Fork and customize for quick MVPs
+
+---
+
+## What Makes This Different
+
+Unlike the [Full Code Example](/full-code-example) which shows the server-side code, this demo provides:
+
+- **Interactive Experience**: Click, create, update, delete in real-time
+- **Visual Feedback**: See how data flows through relationships
+- **Production-Ready UI**: Modern interface patterns you can adapt
+- **Complete Functionality**: Every feature of GAS-DB demonstrated
+- **No Setup Required**: Just click the link and start exploring
+
+---
+
+## Key Concepts Illustrated
+
+### Schema Design
+- Table configuration with type validation
+- Foreign key relationships
+- Junction tables for many-to-many
+- Default values and null handling
+
+### Data Operations
+- Standard CRUD methods
+- Cascade deletion for maintaining referential integrity
+- Bulk reading with `readIdList()`
+- Enhanced debugging with logging methods
+
+### Relationship Queries
+- `getRelatedRecords()` for one-to-many
+- `getJunctionRecords()` for many-to-many
+- Bidirectional querying
+- Efficient foreign key lookups
+
+### Concurrency Management
+- Write locks for conflict resolution
+- Optimistic UI updates
+- Automatic rollback on failure
+- Safe concurrent operations
+
+---
+
+## Performance Features
+
+The webapp demonstrates several optimization techniques:
+
+- **Optional Caching**: Toggle caching for read operations
+- **Pagination Support**: Handle large datasets efficiently
+- **Lazy Loading**: Load data only when needed
+- **Query Optimization**: Compare different query strategies in Advanced Features
+
+---
+
+## Debugging Tools
+
+The Advanced Features module includes developer utilities:
+
+- **Creation Result Inspector**: See exactly what happened during `createWithLogs()`
+- **Validation Logs**: Detailed type checking and conversion logs
+- **Relationship Debugger**: Understand foreign key queries with `getRelatedWithLogs()`
+- **Integrity Checker**: Find and fix orphaned junction records
+- **Timing Comparisons**: Measure performance of different query methods
+
+---
+
+## Next Steps
+
+After exploring the demo:
+
+1. **Review the [Full Code Example](/full-code-example)** to understand the server-side implementation
+2. **Read [Working with Relationships](/relationships-guide)** for in-depth relationship documentation
+3. **Check [Advanced Examples](/advanced-examples)** for specific use cases
+4. **Fork the repository** and customize it for your own project
+5. **Join the discussion** on [GitHub Issues](https://github.com/zambamon/crud-for-sheets/issues)
+
+---
+
+## Questions or Issues?
+
+If you encounter problems or have questions about the demo:
+
+- **Source Code**: [test-db-webapp GitHub Repository](https://github.com/zambamon/test-db-webapp)
+- **Library Issues**: [GAS-DB GitHub Issues](https://github.com/zambamon/crud-for-sheets/issues)
+- **Documentation**: Browse this docs site for detailed guides
+
+---
+
+## Related Documentation
+
+- [Full Code Example](/full-code-example) - Server-side code walkthrough
+- [Working with Relationships](/relationships-guide) - Comprehensive relationship guide
+- [CRUD Operations](/crud-operations) - Basic operation examples
+- [Advanced Examples](/advanced-examples) - Complex use cases
+- [API Reference](/api-reference) - Complete method documentation
