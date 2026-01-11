@@ -24,9 +24,18 @@ This page lists all public methods available in the **Google Apps Script CRUD Cl
   - `config` _(Object)_: Configuration object for the table.
     - **tableName** _(string)_: Name of the table.
     - **historyTableName** _(string, optional)_: Name of the history table for deleted records (defaults to `DELETED_<tableName>`).
+    - **enableVersioning** _(boolean, optional)_: Enable optimistic concurrency control with version field (defaults to `false`). **New in v1.1.0**
     - **fields** _(Object)_: Key-value pairs defining field names and their types.
       - _Supported Types:_ `boolean`, `string`, `date`, `number`
 - **Returns**: An object with `{ status, message }` or `{ status, error }`.
+- **Example**:
+  ```javascript
+  db.createTable({
+    tableName: 'PRODUCTS',
+    enableVersioning: true,
+    fields: { name: 'string', price: 'number' }
+  });
+  ```
 
 ---
 
@@ -45,6 +54,8 @@ Here is the API reference documentation for your function:
       The name of the table to be added.
     - `config.fields` **(Object)**
       An object defining the fields of the table.
+    - `config.enableVersioning` **(boolean, optional)**
+      Enable optimistic concurrency control for this table (defaults to `false`). **New in v1.1.0**
     - `config.historyTableName` **(string, optional)**
       If provided, it is ignored by this method. History tables are managed during table creation, not when adding schema to context.
 
@@ -87,17 +98,24 @@ Here is the API reference documentation for your function:
 
 ## `read(tableName, id)`
 
-- **Description**: Retrieves a single record by its ID.
+- **Description**: Retrieves a single record by its ID. If versioning is enabled for the table, the returned data includes a `version` field.
 - **Parameters**:
   - `tableName` _(string)_
   - `id` _(number | string)_
-- **Returns**: `{ status, data }` or `{ status, error }`.
+- **Returns**: `{ status, data, _versioningEnabled? }` or `{ status, error }`.
+  - `data.version` _(number)_: Current version of the record (if versioning enabled). **New in v1.1.0**
+  - `_versioningEnabled` _(boolean)_: Flag indicating if versioning is active for this table. **New in v1.1.0**
+- **Example**:
+  ```javascript
+  const result = db.read('PRODUCTS', 123);
+  console.log('Version:', result.data.version); // e.g., 5
+  ```
 
 ---
 
-## `update(tableName, id, data, keyOrder, typesChecked?, addUpdatePolicy?)`
+## `update(tableName, id, data, keyOrder, typesChecked?, addUpdatePolicy?, expectedVersion?)`
 
-- **Description**: Updates an existing record.
+- **Description**: Updates an existing record. Supports optimistic concurrency control via version checking.
 - **Parameters**:
   - `tableName` _(string)_  
     The name of the table.
@@ -108,10 +126,17 @@ Here is the API reference documentation for your function:
   - `keyOrder` _(string[])_  
     The order of fields in the sheet.
   - `typesChecked?` _(boolean)_  
-    Whether or not you’ve already validated data types before calling.
+    Whether or not you've already validated data types before calling.
   - `addUpdatePolicy?` _(object)_  
-    Similar to the create policy, if you want to handle “upsert” logic.
-- **Returns**: An object with `{ status, id, data, action }` or `{ status, error }`.
+    Similar to the create policy, if you want to handle "upsert" logic.
+  - `expectedVersion?` _(number)_  
+    Expected version for optimistic concurrency control. **New in v1.1.0**
+- **Returns**: An object with `{ status, id, data, action, version? }` or `{ status, error }`.
+  - `version` _(number)_: New version after update (if versioning enabled). **New in v1.1.0**
+- **Example**:
+  ```javascript
+  const result = db.update('PRODUCTS', 123, data, keyOrder, false, null, currentVersion);
+  ```
 
 ---
 

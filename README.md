@@ -15,10 +15,21 @@ Welcome to the **Google Apps Script CRUD Class for Google Sheets**! This library
 - **🔍 Sorting & Pagination**: Easily sort and paginate your data for better management.
 - **✅ Type Validation**: Ensure data integrity with type checking (`number`, `string`, `boolean`, `date`).
 - **📦 **New** Concurrency Locks**: Prevent race conditions with built-in locking mechanisms for writes and reads.
+- **🔐 **New** Optimistic Concurrency Control**: Prevent lost updates with version-based Compare-And-Swap (CAS) operations.
 - **🔗 **New** Many-to-Many Relationship Support**: Handle complex data relationships using junction tables.
 - **⚡️ Caching**: Improve performance with built-in caching mechanisms.
 - **🎨 Customizable Color Schemes**: Beautify your sheets with predefined color themes.
 - **🗃 **New** Bulk Reading**: Fetch multiple records by ID in a single call.
+
+## 🎉 What's New in v1.1.0
+
+1. **Optimistic Concurrency Control (OCC)**
+
+- **Version-based locking** to prevent lost updates in concurrent scenarios.
+- Enable versioning per table with `enableVersioning: true` in table config.
+- New parameter in `update()`: `expectedVersion` for Compare-And-Swap (CAS) operations.
+- Automatic version increment on successful updates.
+- Perfect for inventory management, financial transactions, and collaborative editing.
 
 ## 🎉 What's New in v1.0.0
 

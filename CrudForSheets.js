@@ -98,6 +98,57 @@ class DB {
   }
 
   /**
+   * Checks if a table has versioning enabled
+   * @param {string} tableName - Name of the table
+   * @returns {boolean} True if versioning is enabled
+   * @private
+   */
+  _isVersioningEnabled(tableName) {
+    return this.tables[tableName] && this.tables[tableName]._enableVersioning === true;
+  }
+
+  /**
+   * Gets the version column index for a table
+   * @param {Object} sheet - The sheet object
+   * @returns {number} Column index of version field (1-based), or -1 if not found
+   * @private
+   */
+  _getVersionColumnIndex(sheet) {
+    const headers = this._getHeaders(sheet);
+    const versionIndex = headers.findIndex(h => h.toUpperCase() === 'VERSION');
+    return versionIndex === -1 ? -1 : versionIndex + 1; // Convert to 1-based index
+  }
+
+  /**
+   * Gets the current version of a record
+   * @param {Object} sheet - The sheet object
+   * @param {number} rowIndex - Row index of the record
+   * @returns {number} Current version number, or 0 if versioning not enabled
+   * @private
+   */
+  _getCurrentVersion(sheet, rowIndex) {
+    const versionColIndex = this._getVersionColumnIndex(sheet);
+    if (versionColIndex === -1) return 0;
+    
+    const version = sheet.getRange(rowIndex, versionColIndex).getValue();
+    return typeof version === 'number' ? version : 0;
+  }
+
+  /**
+   * Sets the version for a record
+   * @param {Object} sheet - The sheet object
+   * @param {number} rowIndex - Row index of the record
+   * @param {number} version - Version number to set
+   * @private
+   */
+  _setVersion(sheet, rowIndex, version) {
+    const versionColIndex = this._getVersionColumnIndex(sheet);
+    if (versionColIndex !== -1) {
+      sheet.getRange(rowIndex, versionColIndex).setValue(version);
+    }
+  }
+
+  /**
    * Sanitizes cell values to prevent CSV injection attacks (CVE-2023-XXXXX)
    * Prevents formula injection by escaping dangerous characters
    * @param {*} value - The value to sanitize
@@ -160,10 +211,11 @@ class DB {
    * @param {string} config.tableName - Name of the main table.
    * @param {string} [config.historyTableName] - Name of the history table.
    * @param {Object<columnName, type>} config.fields - Fields of the table.
+   * @param {boolean} [config.enableVersioning=false] - Enable optimistic concurrency control with version field.
    */
   createTable(config) {
     try {
-      const { tableName, historyTableName, fields } = config;
+      const { tableName, historyTableName, fields, enableVersioning = false } = config;
 
       let mainTable = this.spreadsheet.getSheetByName(tableName);
       if (!mainTable) {
@@ -184,6 +236,7 @@ class DB {
       const headers = [
         "ID",
         "DATE",
+        ...(enableVersioning ? ["VERSION"] : []),
         ...Object.keys(fields).map((field) => field.toUpperCase()),
       ];
 
@@ -196,7 +249,12 @@ class DB {
         .getRange(1, 1, 1, sanitizedHeaders.length)
         .setValues([sanitizedHeaders]);
 
-      this.tables[tableName] = this._normalizeSchemaFields(fields);
+      // Store versioning configuration in table schema
+      const normalizedFields = this._normalizeSchemaFields(fields);
+      this.tables[tableName] = {
+        ...normalizedFields,
+        _enableVersioning: enableVersioning
+      };
       return {
         status: 200,
         message: "table created successfully",
@@ -287,10 +345,11 @@ class DB {
    * @param {Object} config - Table configuration object
    * @param {string} config.tableName - Name of the table
    * @param {Object} config.fields - Field definitions for the table
+   * @param {boolean} [config.enableVersioning=false] - Enable optimistic concurrency control
    * @returns {Object} Status of the operation
    */
   putTableIntoDbContext(config) {
-    const { tableName, historyTableName, fields } = config;
+    const { tableName, historyTableName, fields, enableVersioning = false } = config;
 
     if (this.tables[tableName]) {
       console.error(
@@ -302,7 +361,11 @@ class DB {
           "Error when trying to put table in context of the database: Already in context",
       };
     } else {
-      this.tables[tableName] = this._normalizeSchemaFields(fields);
+      const normalizedFields = this._normalizeSchemaFields(fields);
+      this.tables[tableName] = {
+        ...normalizedFields,
+        _enableVersioning: enableVersioning
+      };
       return {
         status: 200,
         message: "Table added to the schema",
@@ -413,9 +476,11 @@ class DB {
         }
       } else {
         const id = this._getNextId(sheet);
+        const isVersioningEnabled = this._isVersioningEnabled(tableName);
         const row = [
           id,
           now,
+          ...(isVersioningEnabled ? [1] : []), // Initialize version to 1
           ...keyOrder.map((key) => {
             const value = dataWithDefaults[key];
             if (value === undefined) return "";
@@ -433,6 +498,7 @@ class DB {
           status: 200,
           id: id,
           action: "created",
+          ...(isVersioningEnabled ? { version: 1 } : {}),
         };
       }
     } catch (err) {
@@ -837,9 +903,13 @@ class DB {
         const id = this._getNextId(sheet);
         console.log("[CREATE] Generated new ID:", id);
 
+        const isVersioningEnabled = this._isVersioningEnabled(tableName);
+        console.log("[CREATE] Versioning enabled:", isVersioningEnabled);
+
         const row = [
           id,
           now,
+          ...(isVersioningEnabled ? [1] : []), // Initialize version to 1
           ...keyOrder.map((key) => {
             const value = dataWithDefaults[key];
             console.log("[CREATE] Processing field:", {
@@ -875,6 +945,7 @@ class DB {
           status: 200,
           id: id,
           action: "created",
+          ...(isVersioningEnabled ? { version: 1 } : {}),
         };
         console.log("[CREATE] Operation complete:", result);
         return result;
@@ -905,6 +976,7 @@ class DB {
    * @param {string[]} keyOrder - Order of keys to be updated
    * @param typesChecked - Flag indicating if the types of the data are already checked
    * @param addUpdatePolicy
+   * @param {number} [expectedVersion] - Expected version for optimistic concurrency control
    * @returns {Object} Status and updated data
    */
   update(
@@ -913,7 +985,8 @@ class DB {
     data,
     keyOrder,
     typesChecked = false,
-    addUpdatePolicy = null
+    addUpdatePolicy = null,
+    expectedVersion = null
   ) {
     try {
       if (!this._acquireLock(tableName, id, "write")) {
@@ -925,6 +998,23 @@ class DB {
 
         let rowIndex = this._findRowById(sheet, id);
         if (rowIndex === -1) throw new Error(`Record with ID ${id} not found`);
+
+        // Optimistic Concurrency Control: Check version if versioning is enabled
+        const isVersioningEnabled = this._isVersioningEnabled(tableName);
+        let currentVersion = 0;
+        
+        if (isVersioningEnabled) {
+          currentVersion = this._getCurrentVersion(sheet, rowIndex);
+          
+          // If expectedVersion is provided, perform Compare-And-Swap check
+          if (expectedVersion !== null && expectedVersion !== undefined) {
+            if (currentVersion !== expectedVersion) {
+              throw new Error(
+                `Optimistic concurrency conflict: Record has been modified. Expected version ${expectedVersion}, but current version is ${currentVersion}`
+              );
+            }
+          }
+        }
 
         // Apply defaults before validation
         const defaultsApplication = this._applyDefaults(
@@ -993,9 +1083,12 @@ class DB {
         }
 
         const now = new Date();
+        const newVersion = isVersioningEnabled ? currentVersion + 1 : 0;
+        
         const updatedRow = [
           id,
           now,
+          ...(isVersioningEnabled ? [newVersion] : []),
           ...keyOrder.map((key) => {
             const value = dataWithDefaults[key];
             if (value === undefined) return "";
@@ -1017,6 +1110,7 @@ class DB {
           id: id,
           data: { id: id, date: now, ...dataWithDefaults }, // includes defaults used
           action: "updated",
+          ...(isVersioningEnabled ? { version: newVersion } : {}),
         };
       } finally {
         this._releaseLock(tableName, id, "write");
@@ -1183,7 +1277,7 @@ class DB {
    * Read a record from the specified table
    * @param {string} tableName - Name of the sheet/table
    * @param {number} id - ID of the record to read
-   * @returns {Object} Status and data of the read record
+   * @returns {Object} Status and data of the read record (includes version if versioning enabled)
    */
   read(tableName, id) {
     try {
@@ -1212,10 +1306,18 @@ class DB {
           return acc;
         }, {});
 
-        return {
+        // Add metadata about versioning if enabled
+        const isVersioningEnabled = this._isVersioningEnabled(tableName);
+        const result = {
           status: 200,
           data: record,
         };
+
+        if (isVersioningEnabled && record.version !== undefined) {
+          result._versioningEnabled = true;
+        }
+
+        return result;
       } finally {
         this._releaseLock(tableName, id, "read");
       }

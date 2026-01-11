@@ -36,6 +36,11 @@
         "icon": "flask"
       },
       {
+        "title": "Optimistic Concurrency",
+        "href": "/optimistic-concurrency",
+        "icon": "shield-check"
+      },
+      {
         "title": "Test Suite",
         "href": "/test-suite",
         "icon": "beaker"

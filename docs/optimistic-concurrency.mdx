@@ -1,0 +1,628 @@
+---
+title: Optimistic Concurrency Control
+description: Learn how to prevent data conflicts using version-based optimistic locking in GSDB
+---
+
+# Optimistic Concurrency Control
+
+Optimistic Concurrency Control (OCC) is a powerful pattern that helps prevent data conflicts when multiple users or processes attempt to update the same record simultaneously. GSDB implements OCC using a **version field** and **Compare-And-Swap (CAS)** operations.
+
+## What is Optimistic Concurrency?
+
+Unlike pessimistic locking (which locks records during reads), optimistic concurrency assumes conflicts are rare and only checks for conflicts at write time. This approach:
+
+- ✅ **Improves performance** - No locks held during reads
+- ✅ **Prevents lost updates** - Detects when data has changed since it was read
+- ✅ **Scales better** - Multiple users can read simultaneously
+- ✅ **Simple to use** - Just pass the expected version when updating
+
+## How It Works
+
+1. **Read**: When you read a record, you receive its current version number
+2. **Modify**: You make changes to the data locally
+3. **Update**: When updating, you provide the expected version
+4. **Compare-And-Swap**: The system checks if the version matches:
+   - ✅ **Match**: Update succeeds, version increments
+   - ❌ **Mismatch**: Update fails with conflict error
+
+## Enabling Versioning
+
+### For New Tables
+
+Enable versioning when creating a table:
+
+```javascript
+const tableConfig = {
+  tableName: 'PRODUCTS',
+  historyTableName: 'DELETED_PRODUCTS',
+  enableVersioning: true, // Enable optimistic concurrency
+  fields: {
+    name: 'string',
+    price: 'number',
+    stock: 'number'
+  }
+};
+
+const result = db.createTable(tableConfig);
+```
+
+### For Existing Tables
+
+Add versioning to an existing table in your schema:
+
+```javascript
+const tableConfig = {
+  tableName: 'PRODUCTS',
+  enableVersioning: true,
+  fields: {
+    name: 'string',
+    price: 'number',
+    stock: 'number'
+  }
+};
+
+db.putTableIntoDbContext(tableConfig);
+```
+
+**Note**: For existing tables, you'll need to manually add a `VERSION` column after the `DATE` column and initialize all existing records to version 1.
+
+## Basic Usage
+
+### Reading with Version
+
+When versioning is enabled, the `read()` method returns the version:
+
+```javascript
+const result = db.read('PRODUCTS', 123);
+
+if (result.status === 200) {
+  console.log('Product:', result.data);
+  console.log('Current version:', result.data.version);
+  // Output: Current version: 5
+}
+```
+
+### Updating with Version Check
+
+Pass the expected version when updating:
+
+```javascript
+// Read the current data
+const readResult = db.read('PRODUCTS', 123);
+const product = readResult.data;
+const currentVersion = product.version;
+
+// Modify the data
+const updatedData = {
+  name: product.name,
+  price: product.price + 10,
+  stock: product.stock - 1
+};
+
+// Update with version check
+const updateResult = db.update(
+  'PRODUCTS',
+  123,
+  updatedData,
+  ['name', 'price', 'stock'],
+  false, // typesChecked
+  null,  // addUpdatePolicy
+  currentVersion // expectedVersion
+);
+
+if (updateResult.status === 200) {
+  console.log('Update successful!');
+  console.log('New version:', updateResult.version);
+  // Output: New version: 6
+} else {
+  console.error('Update failed:', updateResult.error);
+}
+```
+
+## Handling Conflicts
+
+When a conflict occurs, you'll receive an error indicating the version mismatch:
+
+```javascript
+const result = db.update(
+  'PRODUCTS',
+  123,
+  updatedData,
+  ['name', 'price', 'stock'],
+  false,
+  null,
+  5 // Expected version 5
+);
+
+if (result.status === 409 || result.error?.includes('Optimistic concurrency conflict')) {
+  console.log('Conflict detected!');
+  console.log('Someone else modified this record.');
+  
+  // Handle the conflict:
+  // Option 1: Retry by reading fresh data
+  // Option 2: Notify the user
+  // Option 3: Merge changes
+}
+```
+
+## Conflict Resolution Strategies
+
+### 1. Retry Pattern
+
+Automatically retry the operation with fresh data:
+
+```javascript
+function updateWithRetry(tableName, id, updateFn, keyOrder, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    // Read current data
+    const readResult = db.read(tableName, id);
+    if (readResult.status !== 200) {
+      return readResult;
+    }
+    
+    const currentData = readResult.data;
+    const currentVersion = currentData.version;
+    
+    // Apply user's update function
+    const updatedData = updateFn(currentData);
+    
+    // Attempt update with version check
+    const updateResult = db.update(
+      tableName,
+      id,
+      updatedData,
+      keyOrder,
+      false,
+      null,
+      currentVersion
+    );
+    
+    // Success!
+    if (updateResult.status === 200) {
+      return updateResult;
+    }
+    
+    // Conflict - retry
+    if (updateResult.error?.includes('Optimistic concurrency conflict')) {
+      console.log(`Conflict on attempt ${attempt + 1}, retrying...`);
+      continue;
+    }
+    
+    // Other error - don't retry
+    return updateResult;
+  }
+  
+  return {
+    status: 409,
+    error: 'Max retries exceeded due to conflicts'
+  };
+}
+
+// Usage
+const result = updateWithRetry(
+  'PRODUCTS',
+  123,
+  (product) => ({
+    name: product.name,
+    price: product.price + 10,
+    stock: product.stock - 1
+  }),
+  ['name', 'price', 'stock']
+);
+```
+
+### 2. User Notification
+
+Inform the user and let them decide:
+
+```javascript
+function updateProduct(id, newPrice) {
+  const readResult = db.read('PRODUCTS', id);
+  const product = readResult.data;
+  
+  // User makes changes...
+  const updatedData = {
+    name: product.name,
+    price: newPrice,
+    stock: product.stock
+  };
+  
+  const updateResult = db.update(
+    'PRODUCTS',
+    id,
+    updatedData,
+    ['name', 'price', 'stock'],
+    false,
+    null,
+    product.version
+  );
+  
+  if (updateResult.error?.includes('Optimistic concurrency conflict')) {
+    // Show UI message
+    showConflictDialog({
+      message: 'This product was modified by another user.',
+      options: ['Reload and try again', 'Overwrite their changes']
+    });
+  }
+}
+```
+
+### 3. Merge Strategy
+
+Intelligently merge non-conflicting changes:
+
+```javascript
+function mergeUpdate(tableName, id, changes, keyOrder) {
+  // Read current data
+  const readResult = db.read(tableName, id);
+  const originalData = readResult.data;
+  
+  // Attempt update
+  const mergedData = { ...originalData, ...changes };
+  const updateResult = db.update(
+    tableName,
+    id,
+    mergedData,
+    keyOrder,
+    false,
+    null,
+    originalData.version
+  );
+  
+  // If conflict, re-read and merge
+  if (updateResult.error?.includes('Optimistic concurrency conflict')) {
+    const freshResult = db.read(tableName, id);
+    const freshData = freshResult.data;
+    
+    // Merge: Keep fresh data but apply non-conflicting changes
+    const finalData = { ...freshData };
+    
+    for (const key in changes) {
+      // Only apply change if the field wasn't modified by others
+      if (originalData[key] === freshData[key]) {
+        finalData[key] = changes[key];
+      }
+    }
+    
+    // Retry with fresh version
+    return db.update(
+      tableName,
+      id,
+      finalData,
+      keyOrder,
+      false,
+      null,
+      freshData.version
+    );
+  }
+  
+  return updateResult;
+}
+```
+
+## Real-World Example: Inventory Management
+
+Here's a complete example showing how to safely decrement stock:
+
+```javascript
+function decrementStock(productId, quantity) {
+  const MAX_RETRIES = 5;
+  
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // Read current stock
+    const readResult = db.read('PRODUCTS', productId);
+    
+    if (readResult.status !== 200) {
+      return {
+        success: false,
+        error: 'Product not found'
+      };
+    }
+    
+    const product = readResult.data;
+    const currentVersion = product.version;
+    
+    // Check if enough stock
+    if (product.stock < quantity) {
+      return {
+        success: false,
+        error: 'Insufficient stock'
+      };
+    }
+    
+    // Calculate new stock
+    const updatedProduct = {
+      name: product.name,
+      price: product.price,
+      stock: product.stock - quantity
+    };
+    
+    // Attempt update with version check
+    const updateResult = db.update(
+      'PRODUCTS',
+      productId,
+      updatedProduct,
+      ['name', 'price', 'stock'],
+      false,
+      null,
+      currentVersion
+    );
+    
+    // Success!
+    if (updateResult.status === 200) {
+      return {
+        success: true,
+        newStock: updatedProduct.stock,
+        version: updateResult.version
+      };
+    }
+    
+    // Conflict - retry
+    if (updateResult.error?.includes('Optimistic concurrency conflict')) {
+      console.log(`Stock update conflict, retry ${attempt + 1}/${MAX_RETRIES}`);
+      Utilities.sleep(100 * attempt); // Exponential backoff
+      continue;
+    }
+    
+    // Other error
+    return {
+      success: false,
+      error: updateResult.error
+    };
+  }
+  
+  return {
+    success: false,
+    error: 'Too many conflicts, please try again'
+  };
+}
+
+// Usage
+const result = decrementStock(123, 5);
+if (result.success) {
+  console.log(`Stock updated! New stock: ${result.newStock}`);
+} else {
+  console.error(`Failed: ${result.error}`);
+}
+```
+
+## Best Practices
+
+### 1. Always Use Versions for Critical Updates
+
+For operations that must not lose data (inventory, financial transactions, etc.):
+
+```javascript
+// ✅ GOOD: Version check prevents lost updates
+db.update(tableName, id, data, keyOrder, false, null, expectedVersion);
+
+// ❌ BAD: No version check, updates can be lost
+db.update(tableName, id, data, keyOrder);
+```
+
+### 2. Implement Retry Logic
+
+Most conflicts resolve quickly with a retry:
+
+```javascript
+// ✅ GOOD: Automatic retry
+const result = updateWithRetry('PRODUCTS', id, updateFn, keyOrder, 3);
+
+// ❌ BAD: Fails immediately on conflict
+const result = db.update('PRODUCTS', id, data, keyOrder, false, null, version);
+```
+
+### 3. Keep Update Operations Small
+
+Smaller updates reduce conflict probability:
+
+```javascript
+// ✅ GOOD: Update only what changed
+const updatedData = { stock: product.stock - 1 };
+
+// ❌ BAD: Updating entire record increases conflict chance
+const updatedData = { ...product, stock: product.stock - 1 };
+```
+
+### 4. Use Exponential Backoff
+
+When retrying, add delays to reduce contention:
+
+```javascript
+for (let attempt = 0; attempt < maxRetries; attempt++) {
+  // ... attempt update ...
+  
+  if (conflict) {
+    const delay = 100 * Math.pow(2, attempt); // 100ms, 200ms, 400ms...
+    Utilities.sleep(delay);
+  }
+}
+```
+
+### 5. Monitor Conflict Rates
+
+Track conflicts to identify hotspots:
+
+```javascript
+function updateWithMetrics(tableName, id, data, keyOrder, version) {
+  const result = db.update(tableName, id, data, keyOrder, false, null, version);
+  
+  if (result.error?.includes('Optimistic concurrency conflict')) {
+    // Log to monitoring system
+    logMetric('optimistic_conflict', { table: tableName, id: id });
+  }
+  
+  return result;
+}
+```
+
+## When to Use Optimistic Concurrency
+
+### ✅ Good Use Cases
+
+- **E-commerce inventory**: Prevent overselling
+- **Collaborative editing**: Detect simultaneous changes
+- **Financial transactions**: Ensure balance accuracy
+- **Reservation systems**: Avoid double-booking
+- **Configuration management**: Track version changes
+
+### ❌ Not Recommended For
+
+- **High-contention records**: Records updated constantly by many users
+- **Long-running transactions**: Increases conflict probability
+- **Batch operations**: Use pessimistic locking instead
+- **Append-only logs**: No conflicts possible
+
+## Comparison with Existing Locks
+
+GSDB already has locking mechanisms. Here's how they compare:
+
+| Feature | Existing Locks | Optimistic Concurrency |
+|---------|---------------|----------------------|
+| **Lock Type** | Pessimistic (Script/User lock) | Optimistic (Version check) |
+| **When Locked** | During read/write | Only during write |
+| **Conflict Detection** | Prevents concurrent access | Detects at write time |
+| **Performance** | Can block other operations | Better for read-heavy workloads |
+| **Use Case** | Short critical sections | Long-running user interactions |
+| **Timeout** | 100ms (write), 30s (read) | No timeout, immediate check |
+
+**Recommendation**: Use both together:
+- Existing locks prevent corruption within a single operation
+- Optimistic concurrency prevents conflicts across operations
+
+## Troubleshooting
+
+### Frequent Conflicts
+
+**Problem**: Getting many conflict errors
+
+**Solutions**:
+1. Reduce update frequency
+2. Implement exponential backoff
+3. Consider pessimistic locking for high-contention records
+4. Split hot records into multiple records
+
+### Version Not Found
+
+**Problem**: `version` field is undefined
+
+**Solutions**:
+1. Ensure `enableVersioning: true` in table config
+2. Check that VERSION column exists in sheet
+3. Verify table is in DB context with versioning enabled
+
+### Updates Without Version Check
+
+**Problem**: Updates succeed even with wrong version
+
+**Solutions**:
+1. Ensure you're passing `expectedVersion` parameter
+2. Verify versioning is enabled for the table
+3. Check that VERSION column has numeric values
+
+## Migration Guide
+
+### Adding Versioning to Existing Tables
+
+If you have existing tables without versioning:
+
+1. **Add VERSION column** to your sheet (after DATE column)
+2. **Initialize versions** for existing records:
+
+```javascript
+function addVersioningToExistingTable(tableName) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(tableName);
+  
+  // Insert VERSION column after DATE (column 2)
+  sheet.insertColumnAfter(2);
+  sheet.getRange(1, 3).setValue('VERSION');
+  
+  // Initialize all existing records to version 1
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    const versionData = Array(lastRow - 1).fill([1]);
+    sheet.getRange(2, 3, lastRow - 1, 1).setValues(versionData);
+  }
+  
+  console.log(`Added versioning to ${tableName}`);
+}
+
+// Run once for each table
+addVersioningToExistingTable('PRODUCTS');
+```
+
+3. **Update your schema**:
+
+```javascript
+db.putTableIntoDbContext({
+  tableName: 'PRODUCTS',
+  enableVersioning: true,
+  fields: { /* your fields */ }
+});
+```
+
+## API Reference
+
+### createTable(config)
+
+Creates a table with optional versioning.
+
+**Parameters**:
+- `config.enableVersioning` (boolean, optional): Enable optimistic concurrency control
+
+**Example**:
+```javascript
+db.createTable({
+  tableName: 'PRODUCTS',
+  enableVersioning: true,
+  fields: { name: 'string', price: 'number' }
+});
+```
+
+### update(tableName, id, data, keyOrder, typesChecked, addUpdatePolicy, expectedVersion)
+
+Updates a record with optional version check.
+
+**Parameters**:
+- `expectedVersion` (number, optional): Expected version for CAS operation
+
+**Returns**:
+- `status`: 200 on success, 409 on conflict
+- `version`: New version number (if versioning enabled)
+- `error`: Conflict message if version mismatch
+
+**Example**:
+```javascript
+const result = db.update('PRODUCTS', 123, data, keyOrder, false, null, 5);
+```
+
+### read(tableName, id)
+
+Reads a record including version if available.
+
+**Returns**:
+- `data.version`: Current version number (if versioning enabled)
+- `_versioningEnabled`: Boolean flag indicating versioning status
+
+**Example**:
+```javascript
+const result = db.read('PRODUCTS', 123);
+console.log('Version:', result.data.version);
+```
+
+## Additional Resources
+
+- [CRUD Operations](/crud-operations) - Basic database operations
+- [Advanced Examples](/advanced-examples) - More complex scenarios
+- [Concurrency Locks](/index#concurrency-locks) - Existing lock mechanisms
+- [API Reference](/api-reference) - Complete API documentation
+
+---
+
+**Questions or Issues?**
+
+If you encounter problems or have questions about optimistic concurrency:
+- Check the [Troubleshooting](#troubleshooting) section
+- Review [Best Practices](#best-practices)
+- Open a [Discussion](https://github.com/DanielZamb/crud-for-sheets/discussions)
+- Report bugs via [Issues](https://github.com/DanielZamb/crud-for-sheets/issues)
